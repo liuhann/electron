@@ -5,11 +5,9 @@
 #ifndef ELECTRON_SHELL_BROWSER_API_ELECTRON_API_WEB_FRAME_MAIN_H_
 #define ELECTRON_SHELL_BROWSER_API_ELECTRON_API_WEB_FRAME_MAIN_H_
 
-#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/process/process.h"
 #include "gin/handle.h"
@@ -30,7 +28,9 @@ namespace gin {
 class Arguments;
 }
 
-namespace electron::api {
+namespace electron {
+
+namespace api {
 
 class WebContents;
 
@@ -46,19 +46,15 @@ class WebFrameMain : public gin::Wrappable<WebFrameMain>,
   static gin::Handle<WebFrameMain> From(
       v8::Isolate* isolate,
       content::RenderFrameHost* render_frame_host);
-  static gin::Handle<WebFrameMain> FromOrNull(
-      v8::Isolate* isolate,
-      content::RenderFrameHost* render_frame_host);
   static WebFrameMain* FromFrameTreeNodeId(int frame_tree_node_id);
   static WebFrameMain* FromRenderFrameHost(
       content::RenderFrameHost* render_frame_host);
 
-  // gin_helper::Constructible
-  static void FillObjectTemplate(v8::Isolate*, v8::Local<v8::ObjectTemplate>);
-  static const char* GetClassName() { return "WebFrameMain"; }
-
   // gin::Wrappable
   static gin::WrapperInfo kWrapperInfo;
+  static v8::Local<v8::ObjectTemplate> FillObjectTemplate(
+      v8::Isolate*,
+      v8::Local<v8::ObjectTemplate>);
   const char* GetTypeName() override;
 
   content::RenderFrameHost* render_frame_host() const { return render_frame_; }
@@ -104,7 +100,7 @@ class WebFrameMain : public gin::Wrappable<WebFrameMain>,
   void PostMessage(v8::Isolate* isolate,
                    const std::string& channel,
                    v8::Local<v8::Value> message_value,
-                   std::optional<v8::Local<v8::Value>> transfer);
+                   absl::optional<v8::Local<v8::Value>> transfer);
 
   int FrameTreeNodeID() const;
   std::string Name() const;
@@ -127,7 +123,7 @@ class WebFrameMain : public gin::Wrappable<WebFrameMain>,
 
   int frame_tree_node_id_;
 
-  raw_ptr<content::RenderFrameHost> render_frame_ = nullptr;
+  content::RenderFrameHost* render_frame_ = nullptr;
 
   // Whether the RenderFrameHost has been removed and that it should no longer
   // be accessed.
@@ -136,6 +132,8 @@ class WebFrameMain : public gin::Wrappable<WebFrameMain>,
   base::WeakPtrFactory<WebFrameMain> weak_factory_{this};
 };
 
-}  // namespace electron::api
+}  // namespace api
+
+}  // namespace electron
 
 #endif  // ELECTRON_SHELL_BROWSER_API_ELECTRON_API_WEB_FRAME_MAIN_H_

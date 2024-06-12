@@ -9,17 +9,15 @@
 
 #include <string>
 
-#include "base/functional/callback.h"
-#include "ui/base/glib/scoped_gsignal.h"
 #include "ui/gfx/image/image.h"
 
 namespace ui {
 class MenuModel;
 }
 
-namespace electron::gtkui {
+namespace electron {
 
-using MenuActivatedCallback = base::RepeatingCallback<void(GtkWidget*)>;
+namespace gtkui {
 
 // Builds GtkImageMenuItems.
 GtkWidget* BuildMenuItemWithImage(const std::string& label, GtkWidget* image);
@@ -36,8 +34,8 @@ GtkWidget* AppendMenuItemToMenu(int index,
                                 GtkWidget* menu_item,
                                 GtkWidget* menu,
                                 bool connect_to_activate,
-                                MenuActivatedCallback item_activated_cb,
-                                std::vector<ScopedGSignal>* signals);
+                                GCallback item_activated_cb,
+                                void* this_ptr);
 
 // Gets the ID of a menu item.
 // Returns true if the menu item has an ID.
@@ -51,13 +49,15 @@ void ExecuteCommand(ui::MenuModel* model, int id);
 // See comments in definition of SetMenuItemInfo for more info.
 void BuildSubmenuFromModel(ui::MenuModel* model,
                            GtkWidget* menu,
-                           MenuActivatedCallback item_activated_cb,
+                           GCallback item_activated_cb,
                            bool* block_activation,
-                           std::vector<ScopedGSignal>* signals);
+                           void* this_ptr);
 
 // Sets the check mark, enabled/disabled state and dynamic labels on menu items.
 void SetMenuItemInfo(GtkWidget* widget, void* block_activation_ptr);
 
-}  // namespace electron::gtkui
+}  // namespace gtkui
+
+}  // namespace electron
 
 #endif  // ELECTRON_SHELL_BROWSER_UI_GTK_MENU_UTIL_H_

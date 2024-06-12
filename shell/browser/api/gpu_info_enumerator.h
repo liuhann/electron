@@ -50,12 +50,12 @@ class GPUInfoEnumerator final : public gpu::GPUInfo::Enumerator {
   void EndAuxAttributes() override;
   void BeginOverlayInfo() override;
   void EndOverlayInfo() override;
-  base::Value::Dict GetDictionary();
+  std::unique_ptr<base::DictionaryValue> GetDictionary();
 
  private:
   // The stack is used to manage nested values
-  std::stack<base::Value::Dict> value_stack_;
-  base::Value::Dict current_;
+  std::stack<std::unique_ptr<base::DictionaryValue>> value_stack;
+  std::unique_ptr<base::DictionaryValue> current;
 };
 
 }  // namespace electron

@@ -1,8 +1,8 @@
 const args = require('minimist')(process.argv.slice(2));
-const fs = require('node:fs');
+const fs = require('fs');
 const got = require('got');
-const stream = require('node:stream');
-const { promisify } = require('node:util');
+const stream = require('stream');
+const { promisify } = require('util');
 
 const pipeline = promisify(stream.pipeline);
 
@@ -50,7 +50,7 @@ async function downloadWithRetry (url, directory) {
       return await downloadFile(downloadURL, directory);
     } catch (err) {
       lastError = err;
-      await new Promise(resolve => setTimeout(resolve, 30000));
+      await new Promise((resolve, reject) => setTimeout(resolve, 30000));
     }
   }
   throw lastError;

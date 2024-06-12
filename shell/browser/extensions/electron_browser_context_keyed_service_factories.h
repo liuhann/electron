@@ -5,12 +5,14 @@
 #ifndef ELECTRON_SHELL_BROWSER_EXTENSIONS_ELECTRON_BROWSER_CONTEXT_KEYED_SERVICE_FACTORIES_H_
 #define ELECTRON_SHELL_BROWSER_EXTENSIONS_ELECTRON_BROWSER_CONTEXT_KEYED_SERVICE_FACTORIES_H_
 
-namespace extensions::electron {
+namespace extensions {
+namespace electron {
 
 // Ensures the existence of any BrowserContextKeyedServiceFactory provided by
 // the core extensions code.
 void EnsureBrowserContextKeyedServiceFactoriesBuilt();
 
-}  // namespace extensions::electron
+}  // namespace electron
+}  // namespace extensions
 
 #endif  // ELECTRON_SHELL_BROWSER_EXTENSIONS_ELECTRON_BROWSER_CONTEXT_KEYED_SERVICE_FACTORIES_H_

@@ -53,7 +53,9 @@ struct Converter<blink::mojom::PageVisibilityState> {
 
 }  // namespace gin
 
-namespace electron::api {
+namespace electron {
+
+namespace api {
 
 typedef std::unordered_map<int, WebFrameMain*> WebFrameMainIdMap;
 
@@ -72,17 +74,7 @@ WebFrameMain* WebFrameMain::FromFrameTreeNodeId(int frame_tree_node_id) {
 
 // static
 WebFrameMain* WebFrameMain::FromRenderFrameHost(content::RenderFrameHost* rfh) {
-  if (!rfh)
-    return nullptr;
-
-  // TODO(codebytere): remove after refactoring away from FrameTreeNodeId as map
-  // key.
-  auto* ftn =
-      static_cast<content::RenderFrameHostImpl*>(rfh)->frame_tree_node();
-  if (!ftn)
-    return nullptr;
-
-  return FromFrameTreeNodeId(rfh->GetFrameTreeNodeId());
+  return rfh ? FromFrameTreeNodeId(rfh->GetFrameTreeNodeId()) : nullptr;
 }
 
 gin::WrapperInfo WebFrameMain::kWrapperInfo = {gin::kEmbedderNativeGin};
@@ -194,7 +186,8 @@ void WebFrameMain::Send(v8::Isolate* isolate,
   if (!CheckRenderFrame())
     return;
 
-  GetRendererApi()->Message(internal, channel, std::move(message));
+  GetRendererApi()->Message(internal, channel, std::move(message),
+                            0 /* sender_id */);
 }
 
 const mojo::Remote<mojom::ElectronRenderer>& WebFrameMain::GetRendererApi() {
@@ -239,7 +232,7 @@ void WebFrameMain::OnRendererConnectionError() {
 void WebFrameMain::PostMessage(v8::Isolate* isolate,
                                const std::string& channel,
                                v8::Local<v8::Value> message_value,
-                               std::optional<v8::Local<v8::Value>> transfer) {
+                               absl::optional<v8::Local<v8::Value>> transfer) {
   blink::TransferableMessage transferable_message;
   if (!electron::SerializeV8Value(isolate, message_value,
                                   &transferable_message)) {
@@ -334,11 +327,14 @@ std::vector<content::RenderFrameHost*> WebFrameMain::Frames() const {
   if (!CheckRenderFrame())
     return frame_hosts;
 
-  render_frame_->ForEachRenderFrameHost(
-      [&frame_hosts, this](content::RenderFrameHost* rfh) {
-        if (rfh->GetParent() == render_frame_)
-          frame_hosts.push_back(rfh);
-      });
+  render_frame_->ForEachRenderFrameHost(base::BindRepeating(
+      [](std::vector<content::RenderFrameHost*>* frame_hosts,
+         content::RenderFrameHost* current_frame,
+         content::RenderFrameHost* rfh) {
+        if (rfh->GetParent() == current_frame)
+          frame_hosts->push_back(rfh);
+      },
+      &frame_hosts, render_frame_));
 
   return frame_hosts;
 }
@@ -348,10 +344,10 @@ std::vector<content::RenderFrameHost*> WebFrameMain::FramesInSubtree() const {
   if (!CheckRenderFrame())
     return frame_hosts;
 
-  render_frame_->ForEachRenderFrameHost(
-      [&frame_hosts](content::RenderFrameHost* rfh) {
-        frame_hosts.push_back(rfh);
-      });
+  render_frame_->ForEachRenderFrameHost(base::BindRepeating(
+      [](std::vector<content::RenderFrameHost*>* frame_hosts,
+         content::RenderFrameHost* rfh) { frame_hosts->push_back(rfh); },
+      &frame_hosts));
 
   return frame_hosts;
 }
@@ -368,9 +364,8 @@ gin::Handle<WebFrameMain> WebFrameMain::New(v8::Isolate* isolate) {
 // static
 gin::Handle<WebFrameMain> WebFrameMain::From(v8::Isolate* isolate,
                                              content::RenderFrameHost* rfh) {
-  if (!rfh)
+  if (rfh == nullptr)
     return gin::Handle<WebFrameMain>();
-
   auto* web_frame = FromRenderFrameHost(rfh);
   if (web_frame)
     return gin::CreateHandle(isolate, web_frame);
@@ -384,23 +379,10 @@ gin::Handle<WebFrameMain> WebFrameMain::From(v8::Isolate* isolate,
 }
 
 // static
-gin::Handle<WebFrameMain> WebFrameMain::FromOrNull(
+v8::Local<v8::ObjectTemplate> WebFrameMain::FillObjectTemplate(
     v8::Isolate* isolate,
-    content::RenderFrameHost* rfh) {
-  if (!rfh)
-    return gin::Handle<WebFrameMain>();
-
-  auto* web_frame = FromRenderFrameHost(rfh);
-  if (!web_frame)
-    return gin::Handle<WebFrameMain>();
-
-  return gin::CreateHandle(isolate, web_frame);
-}
-
-// static
-void WebFrameMain::FillObjectTemplate(v8::Isolate* isolate,
-                                      v8::Local<v8::ObjectTemplate> templ) {
-  gin_helper::ObjectTemplateBuilder(isolate, templ)
+    v8::Local<v8::ObjectTemplate> templ) {
+  return gin_helper::ObjectTemplateBuilder(isolate, templ)
       .SetMethod("executeJavaScript", &WebFrameMain::ExecuteJavaScript)
       .SetMethod("reload", &WebFrameMain::Reload)
       .SetMethod("_send", &WebFrameMain::Send)
@@ -421,10 +403,12 @@ void WebFrameMain::FillObjectTemplate(v8::Isolate* isolate,
 }
 
 const char* WebFrameMain::GetTypeName() {
-  return GetClassName();
+  return "WebFrameMain";
 }
 
-}  // namespace electron::api
+}  // namespace api
+
+}  // namespace electron
 
 namespace {
 
@@ -444,20 +428,6 @@ v8::Local<v8::Value> FromID(gin_helper::ErrorThrower thrower,
   return WebFrameMain::From(thrower.isolate(), rfh).ToV8();
 }
 
-v8::Local<v8::Value> FromIDOrNull(gin_helper::ErrorThrower thrower,
-                                  int render_process_id,
-                                  int render_frame_id) {
-  if (!electron::Browser::Get()->is_ready()) {
-    thrower.ThrowError("WebFrameMain is available only after app ready");
-    return v8::Null(thrower.isolate());
-  }
-
-  auto* rfh =
-      content::RenderFrameHost::FromID(render_process_id, render_frame_id);
-
-  return WebFrameMain::FromOrNull(thrower.isolate(), rfh).ToV8();
-}
-
 void Initialize(v8::Local<v8::Object> exports,
                 v8::Local<v8::Value> unused,
                 v8::Local<v8::Context> context,
@@ -466,9 +436,8 @@ void Initialize(v8::Local<v8::Object> exports,
   gin_helper::Dictionary dict(isolate, exports);
   dict.Set("WebFrameMain", WebFrameMain::GetConstructor(context));
   dict.SetMethod("fromId", &FromID);
-  dict.SetMethod("fromIdOrNull", &FromIDOrNull);
 }
 
 }  // namespace
 
-NODE_LINKED_BINDING_CONTEXT_AWARE(electron_browser_web_frame_main, Initialize)
+NODE_LINKED_MODULE_CONTEXT_AWARE(electron_browser_web_frame_main, Initialize)

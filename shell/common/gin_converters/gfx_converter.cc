@@ -4,17 +4,12 @@
 
 #include "shell/common/gin_converters/gfx_converter.h"
 
-#include <string>
-
-#include "gin/data_object_builder.h"
-#include "shell/common/color_util.h"
 #include "shell/common/gin_helper/dictionary.h"
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
-#include "ui/gfx/geometry/insets.h"
 #include "ui/gfx/geometry/point.h"
 #include "ui/gfx/geometry/point_f.h"
-#include "ui/gfx/geometry/rect_conversions.h"
+#include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/geometry/resize_utils.h"
 #include "ui/gfx/geometry/size.h"
 
@@ -22,7 +17,8 @@ namespace gin {
 
 v8::Local<v8::Value> Converter<gfx::Point>::ToV8(v8::Isolate* isolate,
                                                  const gfx::Point& val) {
-  auto dict = gin_helper::Dictionary::CreateEmpty(isolate);
+  gin_helper::Dictionary dict = gin::Dictionary::CreateEmpty(isolate);
+  dict.SetHidden("simple", true);
   dict.Set("x", val.x());
   dict.Set("y", val.y());
   return dict.GetHandle();
@@ -44,7 +40,8 @@ bool Converter<gfx::Point>::FromV8(v8::Isolate* isolate,
 
 v8::Local<v8::Value> Converter<gfx::PointF>::ToV8(v8::Isolate* isolate,
                                                   const gfx::PointF& val) {
-  auto dict = gin_helper::Dictionary::CreateEmpty(isolate);
+  gin_helper::Dictionary dict = gin::Dictionary::CreateEmpty(isolate);
+  dict.SetHidden("simple", true);
   dict.Set("x", val.x());
   dict.Set("y", val.y());
   return dict.GetHandle();
@@ -65,7 +62,8 @@ bool Converter<gfx::PointF>::FromV8(v8::Isolate* isolate,
 
 v8::Local<v8::Value> Converter<gfx::Size>::ToV8(v8::Isolate* isolate,
                                                 const gfx::Size& val) {
-  auto dict = gin_helper::Dictionary::CreateEmpty(isolate);
+  gin_helper::Dictionary dict = gin::Dictionary::CreateEmpty(isolate);
+  dict.SetHidden("simple", true);
   dict.Set("width", val.width());
   dict.Set("height", val.height());
   return dict.GetHandle();
@@ -86,7 +84,8 @@ bool Converter<gfx::Size>::FromV8(v8::Isolate* isolate,
 
 v8::Local<v8::Value> Converter<gfx::Rect>::ToV8(v8::Isolate* isolate,
                                                 const gfx::Rect& val) {
-  auto dict = gin_helper::Dictionary::CreateEmpty(isolate);
+  gin_helper::Dictionary dict = gin::Dictionary::CreateEmpty(isolate);
+  dict.SetHidden("simple", true);
   dict.Set("x", val.x());
   dict.Set("y", val.y());
   dict.Set("width", val.width());
@@ -100,41 +99,11 @@ bool Converter<gfx::Rect>::FromV8(v8::Isolate* isolate,
   gin::Dictionary dict(isolate);
   if (!gin::ConvertFromV8(isolate, val, &dict))
     return false;
-  float x, y, width, height;
+  int x, y, width, height;
   if (!dict.Get("x", &x) || !dict.Get("y", &y) || !dict.Get("width", &width) ||
       !dict.Get("height", &height))
     return false;
-
-  *out = ToRoundedRect(gfx::RectF(x, y, width, height));
-  return true;
-}
-
-v8::Local<v8::Value> Converter<gfx::Insets>::ToV8(v8::Isolate* isolate,
-                                                  const gfx::Insets& val) {
-  return gin::DataObjectBuilder(isolate)
-      .Set("top", val.top())
-      .Set("left", val.left())
-      .Set("bottom", val.bottom())
-      .Set("right", val.right())
-      .Build();
-}
-
-bool Converter<gfx::Insets>::FromV8(v8::Isolate* isolate,
-                                    v8::Local<v8::Value> val,
-                                    gfx::Insets* out) {
-  gin::Dictionary dict(isolate);
-  if (!gin::ConvertFromV8(isolate, val, &dict))
-    return false;
-  double top, left, right, bottom;
-  if (!dict.Get("top", &top))
-    return false;
-  if (!dict.Get("left", &left))
-    return false;
-  if (!dict.Get("bottom", &bottom))
-    return false;
-  if (!dict.Get("right", &right))
-    return false;
-  *out = gfx::Insets::TLBR(top, left, bottom, right);
+  *out = gfx::Rect(x, y, width, height);
   return true;
 }
 
@@ -172,25 +141,22 @@ struct Converter<display::Display::TouchSupport> {
 v8::Local<v8::Value> Converter<display::Display>::ToV8(
     v8::Isolate* isolate,
     const display::Display& val) {
-  auto dict = gin_helper::Dictionary::CreateEmpty(isolate);
-  dict.Set("accelerometerSupport", val.accelerometer_support());
-  dict.Set("bounds", val.bounds());
-  dict.Set("colorDepth", val.color_depth());
-  dict.Set("colorSpace", val.GetColorSpaces().GetRasterColorSpace().ToString());
-  dict.Set("depthPerComponent", val.depth_per_component());
-  dict.Set("detected", val.detected());
-  dict.Set("displayFrequency", val.display_frequency());
+  gin_helper::Dictionary dict = gin::Dictionary::CreateEmpty(isolate);
+  dict.SetHidden("simple", true);
   dict.Set("id", val.id());
-  dict.Set("internal", val.IsInternal());
-  dict.Set("label", val.label());
-  dict.Set("maximumCursorSize", val.maximum_cursor_size());
-  dict.Set("monochrome", val.is_monochrome());
-  dict.Set("nativeOrigin", val.native_origin());
-  dict.Set("rotation", val.RotationAsDegree());
-  dict.Set("scaleFactor", val.device_scale_factor());
-  dict.Set("size", val.size());
+  dict.Set("bounds", val.bounds());
   dict.Set("workArea", val.work_area());
+  dict.Set("accelerometerSupport", val.accelerometer_support());
+  dict.Set("monochrome", val.is_monochrome());
+  dict.Set("colorDepth", val.color_depth());
+  dict.Set("colorSpace", val.color_spaces().GetRasterColorSpace().ToString());
+  dict.Set("depthPerComponent", val.depth_per_component());
+  dict.Set("size", val.size());
+  dict.Set("displayFrequency", val.display_frequency());
   dict.Set("workAreaSize", val.work_area_size());
+  dict.Set("scaleFactor", val.device_scale_factor());
+  dict.Set("rotation", val.RotationAsDegree());
+  dict.Set("internal", val.IsInternal());
   dict.Set("touchSupport", val.touch_support());
   return dict.GetHandle();
 }
@@ -218,16 +184,6 @@ v8::Local<v8::Value> Converter<gfx::ResizeEdge>::ToV8(
     default:
       return StringToV8(isolate, "unknown");
   }
-}
-
-bool Converter<WrappedSkColor>::FromV8(v8::Isolate* isolate,
-                                       v8::Local<v8::Value> val,
-                                       WrappedSkColor* out) {
-  std::string str;
-  if (!gin::ConvertFromV8(isolate, val, &str))
-    return false;
-  *out = electron::ParseCSSColor(str);
-  return true;
 }
 
 }  // namespace gin

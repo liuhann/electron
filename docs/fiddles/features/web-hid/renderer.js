@@ -1,10 +1,19 @@
-function formatDevices (devices) {
-  return devices.map(device => device.productName).join('<hr>')
+async function testIt() {
+  const grantedDevices = await navigator.hid.getDevices()
+  let grantedDeviceList = ''
+  grantedDevices.forEach(device => {
+    grantedDeviceList += `<hr>${device.productName}</hr>`
+  })
+  document.getElementById('granted-devices').innerHTML = grantedDeviceList
+  const grantedDevices2 = await navigator.hid.requestDevice({
+    filters: []
+  })
+
+  grantedDeviceList = ''
+   grantedDevices2.forEach(device => {
+    grantedDeviceList += `<hr>${device.productName}</hr>`
+  })
+  document.getElementById('granted-devices2').innerHTML = grantedDeviceList
 }
 
-async function testIt () {
-  document.getElementById('granted-devices').innerHTML = formatDevices(await navigator.hid.getDevices())
-  document.getElementById('granted-devices2').innerHTML = formatDevices(await navigator.hid.requestDevice({ filters: [] }))
-}
-
-document.getElementById('clickme').addEventListener('click', testIt)
+document.getElementById('clickme').addEventListener('click',testIt)

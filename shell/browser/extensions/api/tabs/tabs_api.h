@@ -7,7 +7,6 @@
 
 #include <string>
 
-#include "base/memory/raw_ptr.h"
 #include "extensions/browser/api/execute_code_function.h"
 #include "extensions/browser/extension_function.h"
 #include "extensions/common/extension_resource.h"
@@ -53,14 +52,6 @@ class TabsReloadFunction : public ExtensionFunction {
   ResponseAction Run() override;
 
   DECLARE_EXTENSION_FUNCTION("tabs.reload", TABS_RELOAD)
-};
-
-class TabsQueryFunction : public ExtensionFunction {
-  ~TabsQueryFunction() override {}
-
-  ResponseAction Run() override;
-
-  DECLARE_EXTENSION_FUNCTION("tabs.query", TABS_QUERY)
 };
 
 class TabsGetFunction : public ExtensionFunction {
@@ -116,10 +107,13 @@ class TabsUpdateFunction : public ExtensionFunction {
   bool UpdateURL(const std::string& url, int tab_id, std::string* error);
   ResponseValue GetResult();
 
-  raw_ptr<content::WebContents> web_contents_;
+  content::WebContents* web_contents_;
 
  private:
   ResponseAction Run() override;
+  void OnExecuteCodeFinished(const std::string& error,
+                             const GURL& on_url,
+                             const base::ListValue& script_result);
 
   DECLARE_EXTENSION_FUNCTION("tabs.update", TABS_UPDATE)
 };

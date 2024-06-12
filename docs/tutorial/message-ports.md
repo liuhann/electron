@@ -126,7 +126,7 @@ app.whenReady().then(async () => {
 Then, in your preload scripts you receive the port through IPC and set up the
 listeners.
 
-```js title='preloadMain.js and preloadSecondary.js (Preload scripts)' @ts-window-type={electronMessagePort:MessagePort}
+```js title='preloadMain.js and preloadSecondary.js (Preload scripts)'
 const { ipcRenderer } = require('electron')
 
 ipcRenderer.on('port', e => {
@@ -148,9 +148,9 @@ That means window.electronMessagePort is globally available and you can call
 `postMessage` on it from anywhere in your app to send a message to the other
 renderer.
 
-```js title='renderer.js (Renderer Process)' @ts-window-type={electronMessagePort:MessagePort}
+```js title='renderer.js (Renderer Process)'
 // elsewhere in your code to send a message to the other renderers message handler
-window.electronMessagePort.postMessage('ping')
+window.electronMessagePort.postmessage('ping')
 ```
 
 ### Worker process
@@ -180,16 +180,19 @@ app.whenReady().then(async () => {
 
   // We can't use ipcMain.handle() here, because the reply needs to transfer a
   // MessagePort.
-  // Listen for message sent from the top-level frame
-  mainWindow.webContents.mainFrame.ipc.on('request-worker-channel', (event) => {
-    // Create a new channel ...
-    const { port1, port2 } = new MessageChannelMain()
-    // ... send one end to the worker ...
-    worker.webContents.postMessage('new-client', null, [port1])
-    // ... and the other end to the main window.
-    event.senderFrame.postMessage('provide-worker-channel', null, [port2])
-    // Now the main window and the worker can communicate with each other
-    // without going through the main process!
+  ipcMain.on('request-worker-channel', (event) => {
+    // For security reasons, let's make sure only the frames we expect can
+    // access the worker.
+    if (event.senderFrame === mainWindow.webContents.mainFrame) {
+      // Create a new channel ...
+      const { port1, port2 } = new MessageChannelMain()
+      // ... send one end to the worker ...
+      worker.webContents.postMessage('new-client', null, [port1])
+      // ... and the other end to the main window.
+      event.senderFrame.postMessage('provide-worker-channel', null, [port2])
+      // Now the main window and the worker can communicate with each other
+      // without going through the main process!
+    }
   })
 })
 ```
@@ -245,7 +248,7 @@ Electron's built-in IPC methods only support two modes: fire-and-forget
 can implement a "response stream", where a single request responds with a
 stream of data.
 
-```js title='renderer.js (Renderer Process)' @ts-expect-error=[18]
+```js title='renderer.js (Renderer Process)'
 const makeStreamingRequest = (element, callback) => {
   // MessageChannels are lightweight--it's cheap to create a new one for each
   // request.
@@ -303,7 +306,7 @@ without having to step through the isolated world.
 
 ```js title='main.js (Main Process)'
 const { BrowserWindow, app, MessageChannelMain } = require('electron')
-const path = require('node:path')
+const path = require('path')
 
 app.whenReady().then(async () => {
   // Create a BrowserWindow with contextIsolation enabled.
@@ -365,7 +368,7 @@ window.onmessage = (event) => {
     // process.
     port.onmessage = (event) => {
       console.log('from main process:', event.data)
-      port.postMessage(event.data.test * 2)
+      port.postMessage(event.data * 2)
     }
   }
 }

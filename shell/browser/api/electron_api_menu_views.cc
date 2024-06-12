@@ -8,11 +8,14 @@
 #include <utility>
 
 #include "shell/browser/native_window_views.h"
+#include "shell/browser/unresponsive_suppressor.h"
 #include "ui/display/screen.h"
 
 using views::MenuRunner;
 
-namespace electron::api {
+namespace electron {
+
+namespace api {
 
 MenuViews::MenuViews(gin::Arguments* args) : Menu(args) {}
 
@@ -22,7 +25,6 @@ void MenuViews::PopupAt(BaseWindow* window,
                         int x,
                         int y,
                         int positioning_item,
-                        ui::MenuSourceType source_type,
                         base::OnceClosure callback) {
   auto* native_window = static_cast<NativeWindowViews*>(window->window());
   if (!native_window)
@@ -39,6 +41,9 @@ void MenuViews::PopupAt(BaseWindow* window,
 
   int flags = MenuRunner::CONTEXT_MENU | MenuRunner::HAS_MNEMONICS;
 
+  // Don't emit unresponsive event when showing menu.
+  electron::UnresponsiveSuppressor suppressor;
+
   // Make sure the Menu object would not be garbage-collected until the callback
   // has run.
   base::OnceClosure callback_with_ref = BindSelfToClosure(std::move(callback));
@@ -52,26 +57,24 @@ void MenuViews::PopupAt(BaseWindow* window,
   auto close_callback = base::AdaptCallbackForRepeating(
       base::BindOnce(&MenuViews::OnClosed, weak_factory_.GetWeakPtr(),
                      window_id, std::move(callback_with_ref)));
-  auto& runner = menu_runners_[window_id] =
+  menu_runners_[window_id] =
       std::make_unique<MenuRunner>(model(), flags, std::move(close_callback));
-  runner->RunMenuAt(native_window->widget(), nullptr,
-                    gfx::Rect{location, gfx::Size{}},
-                    views::MenuAnchorPosition::kTopLeft, source_type);
+  menu_runners_[window_id]->RunMenuAt(
+      native_window->widget(), nullptr, gfx::Rect(location, gfx::Size()),
+      views::MenuAnchorPosition::kTopLeft, ui::MENU_SOURCE_MOUSE);
 }
 
 void MenuViews::ClosePopupAt(int32_t window_id) {
-  if (auto iter = menu_runners_.find(window_id); iter != menu_runners_.end()) {
+  auto runner = menu_runners_.find(window_id);
+  if (runner != menu_runners_.end()) {
     // Close the runner for the window.
-    iter->second->Cancel();
-    return;
-  }
-
-  if (window_id == -1) {
-    // When -1 is passed in, close all opened runners.
-    // Note: `Cancel()` invalidaes iters, so move() to a temp before looping
-    auto tmp = std::move(menu_runners_);
-    for (auto& [id, runner] : tmp)
-      runner->Cancel();
+    runner->second->Cancel();
+  } else if (window_id == -1) {
+    // Or just close all opened runners.
+    for (auto it = menu_runners_.begin(); it != menu_runners_.end();) {
+      // The iterator is invalidated after the call.
+      (it++)->second->Cancel();
+    }
   }
 }
 
@@ -88,4 +91,6 @@ gin::Handle<Menu> Menu::New(gin::Arguments* args) {
   return handle;
 }
 
-}  // namespace electron::api
+}  // namespace api
+
+}  // namespace electron

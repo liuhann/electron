@@ -9,7 +9,7 @@ _This class is not exported from the `'electron'` module. It is only available a
 It is used in `will-download` event of `Session` class, and allows users to
 control the download item.
 
-```js
+```javascript
 // In the main process.
 const { BrowserWindow } = require('electron')
 const win = new BrowserWindow()

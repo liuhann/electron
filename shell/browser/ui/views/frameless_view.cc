@@ -4,11 +4,10 @@
 
 #include "shell/browser/ui/views/frameless_view.h"
 
+#include "shell/browser/native_browser_view_views.h"
 #include "shell/browser/native_window_views.h"
-#include "shell/browser/ui/inspectable_web_contents_view.h"
 #include "ui/aura/window.h"
 #include "ui/base/hit_test.h"
-#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/views/widget/widget.h"
 #include "ui/views/widget/widget_delegate.h"
 
@@ -20,6 +19,9 @@ const int kResizeInsideBoundsSize = 5;
 const int kResizeAreaCornerSize = 16;
 
 }  // namespace
+
+// static
+const char FramelessView::kViewClassName[] = "FramelessView";
 
 FramelessView::FramelessView() = default;
 
@@ -73,18 +75,29 @@ gfx::Rect FramelessView::GetWindowBoundsForClientBounds(
   return window_bounds;
 }
 
-int FramelessView::NonClientHitTest(const gfx::Point& point) {
+int FramelessView::NonClientHitTest(const gfx::Point& cursor) {
   if (frame_->IsFullscreen())
     return HTCLIENT;
 
-  int contents_hit_test = window_->NonClientHitTest(point);
-  if (contents_hit_test != HTNOWHERE)
-    return contents_hit_test;
+  // Check attached BrowserViews for potential draggable areas.
+  for (auto* view : window_->browser_views()) {
+    auto* native_view = static_cast<NativeBrowserViewViews*>(view);
+    auto* view_draggable_region = native_view->draggable_region();
+    if (view_draggable_region &&
+        view_draggable_region->contains(cursor.x(), cursor.y()))
+      return HTCAPTION;
+  }
 
   // Support resizing frameless window by dragging the border.
-  int frame_component = ResizingBorderHitTest(point);
+  int frame_component = ResizingBorderHitTest(cursor);
   if (frame_component != HTNOWHERE)
     return frame_component;
+
+  // Check for possible draggable region in the client area for the frameless
+  // window.
+  SkRegion* draggable_region = window_->draggable_region();
+  if (draggable_region && draggable_region->contains(cursor.x(), cursor.y()))
+    return HTCAPTION;
 
   return HTCLIENT;
 }
@@ -109,11 +122,10 @@ views::View* FramelessView::TargetForRect(views::View* root,
   return NonClientFrameView::TargetForRect(root, rect);
 }
 
-gfx::Size FramelessView::CalculatePreferredSize(
-    const views::SizeBounds& available_size) const {
+gfx::Size FramelessView::CalculatePreferredSize() const {
   return frame_->non_client_view()
-      ->GetWindowBoundsForClientBounds(gfx::Rect(
-          frame_->client_view()->CalculatePreferredSize(available_size)))
+      ->GetWindowBoundsForClientBounds(
+          gfx::Rect(frame_->client_view()->GetPreferredSize()))
       .size();
 }
 
@@ -128,7 +140,8 @@ gfx::Size FramelessView::GetMaximumSize() const {
   return size.IsEmpty() ? gfx::Size(INT_MAX, INT_MAX) : size;
 }
 
-BEGIN_METADATA(FramelessView)
-END_METADATA
+const char* FramelessView::GetClassName() const {
+  return kViewClassName;
+}
 
 }  // namespace electron

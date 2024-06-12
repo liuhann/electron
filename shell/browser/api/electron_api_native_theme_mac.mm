@@ -4,26 +4,34 @@
 
 #include "shell/browser/api/electron_api_native_theme.h"
 
+#include "base/mac/sdk_forward_declarations.h"
 #include "shell/browser/mac/electron_application.h"
 
-namespace electron::api {
+namespace electron {
+
+namespace api {
 
 void NativeTheme::UpdateMacOSAppearanceForOverrideValue(
     ui::NativeTheme::ThemeSource override) {
-  NSAppearance* new_appearance;
-  switch (override) {
-    case ui::NativeTheme::ThemeSource::kForcedDark:
-      new_appearance = [NSAppearance appearanceNamed:NSAppearanceNameDarkAqua];
-      break;
-    case ui::NativeTheme::ThemeSource::kForcedLight:
-      new_appearance = [NSAppearance appearanceNamed:NSAppearanceNameAqua];
-      break;
-    case ui::NativeTheme::ThemeSource::kSystem:
-    default:
-      new_appearance = nil;
-      break;
+  if (@available(macOS 10.14, *)) {
+    NSAppearance* new_appearance;
+    switch (override) {
+      case ui::NativeTheme::ThemeSource::kForcedDark:
+        new_appearance =
+            [NSAppearance appearanceNamed:NSAppearanceNameDarkAqua];
+        break;
+      case ui::NativeTheme::ThemeSource::kForcedLight:
+        new_appearance = [NSAppearance appearanceNamed:NSAppearanceNameAqua];
+        break;
+      case ui::NativeTheme::ThemeSource::kSystem:
+      default:
+        new_appearance = nil;
+        break;
+    }
+    [[NSApplication sharedApplication] setAppearance:new_appearance];
   }
-  [[NSApplication sharedApplication] setAppearance:new_appearance];
 }
 
-}  // namespace electron::api
+}  // namespace api
+
+}  // namespace electron

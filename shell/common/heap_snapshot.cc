@@ -5,7 +5,6 @@
 #include "shell/common/heap_snapshot.h"
 
 #include "base/files/file.h"
-#include "base/memory/raw_ptr.h"
 #include "v8/include/v8-profiler.h"
 #include "v8/include/v8.h"
 
@@ -29,7 +28,7 @@ class HeapSnapshotOutputStream : public v8::OutputStream {
   }
 
  private:
-  raw_ptr<base::File> file_ = nullptr;
+  base::File* file_ = nullptr;
   bool is_complete_ = false;
 };
 

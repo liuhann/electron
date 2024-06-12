@@ -30,14 +30,14 @@ class ElectronExtensionHostDelegate : public ExtensionHostDelegate {
   void CreateTab(std::unique_ptr<content::WebContents> web_contents,
                  const std::string& extension_id,
                  WindowOpenDisposition disposition,
-                 const blink::mojom::WindowFeatures& window_features,
+                 const gfx::Rect& initial_rect,
                  bool user_gesture) override;
   void ProcessMediaAccessRequest(content::WebContents* web_contents,
                                  const content::MediaStreamRequest& request,
                                  content::MediaResponseCallback callback,
                                  const Extension* extension) override;
   bool CheckMediaAccessPermission(content::RenderFrameHost* render_frame_host,
-                                  const url::Origin& security_origin,
+                                  const GURL& security_origin,
                                   blink::mojom::MediaStreamType type,
                                   const Extension* extension) override;
   content::PictureInPictureResult EnterPictureInPicture(

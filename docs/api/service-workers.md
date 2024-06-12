@@ -10,7 +10,7 @@ a `Session`.
 
 For example:
 
-```js
+```javascript
 const { session } = require('electron')
 
 // Get all service workers.

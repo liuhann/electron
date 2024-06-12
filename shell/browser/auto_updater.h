@@ -70,9 +70,6 @@ class AutoUpdater {
   static void CheckForUpdates();
   static void QuitAndInstall();
 
-  static bool IsVersionAllowedForUpdate(const std::string& current_version,
-                                        const std::string& target_version);
-
  private:
   static Delegate* delegate_;
 };

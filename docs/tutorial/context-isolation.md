@@ -16,7 +16,7 @@ Context isolation has been enabled by default since Electron 12, and it is a rec
 
 Exposing APIs from your preload script to a loaded website in the renderer process is a common use-case. With context isolation disabled, your preload script would share a common global `window` object with the renderer. You could then attach arbitrary properties to a preload script:
 
-```js title='preload.js' @ts-nocheck
+```javascript title='preload.js'
 // preload with contextIsolation disabled
 window.myAPI = {
   doAThing: () => {}
@@ -25,7 +25,7 @@ window.myAPI = {
 
 The `doAThing()` function could then be used directly in the renderer process:
 
-```js title='renderer.js' @ts-nocheck
+```javascript title='renderer.js'
 // use the exposed API in the renderer
 window.myAPI.doAThing()
 ```
@@ -34,7 +34,7 @@ window.myAPI.doAThing()
 
 There is a dedicated module in Electron to help you do this in a painless way. The [`contextBridge`](../api/context-bridge.md) module can be used to **safely** expose APIs from your preload script's isolated context to the context the website is running in. The API will also be accessible from the website on `window.myAPI` just like it was before.
 
-```js title='preload.js'
+```javascript title='preload.js'
 // preload with contextIsolation enabled
 const { contextBridge } = require('electron')
 
@@ -43,7 +43,7 @@ contextBridge.exposeInMainWorld('myAPI', {
 })
 ```
 
-```js title='renderer.js' @ts-nocheck
+```javascript title='renderer.js'
 // use the exposed API in the renderer
 window.myAPI.doAThing()
 ```
@@ -54,7 +54,7 @@ Please read the `contextBridge` documentation linked above to fully understand i
 
 Just enabling `contextIsolation` and using `contextBridge` does not automatically mean that everything you do is safe. For instance, this code is **unsafe**.
 
-```js title='preload.js'
+```javascript title='preload.js'
 // ❌ Bad code
 contextBridge.exposeInMainWorld('myAPI', {
   send: ipcRenderer.send
@@ -63,7 +63,7 @@ contextBridge.exposeInMainWorld('myAPI', {
 
 It directly exposes a powerful API without any kind of argument filtering. This would allow any website to send arbitrary IPC messages, which you do not want to be possible. The correct way to expose IPC-based APIs would instead be to provide one method per IPC message.
 
-```js title='preload.js'
+```javascript title='preload.js'
 // ✅ Good code
 contextBridge.exposeInMainWorld('myAPI', {
   loadPreferences: () => ipcRenderer.invoke('load-prefs')
@@ -72,19 +72,19 @@ contextBridge.exposeInMainWorld('myAPI', {
 
 ## Usage with TypeScript
 
-If you're building your Electron app with TypeScript, you'll want to add types to your APIs exposed over the context bridge. The renderer's `window` object won't have the correct typings unless you extend the types with a [declaration file][].
+If you're building your Electron app with TypeScript, you'll want to add types to your APIs exposed over the context bridge. The renderer's `window` object won't have the correct typings unless you extend the types with a [declaration file].
 
 For example, given this `preload.ts` script:
 
-```ts title='preload.ts'
+```typescript title='preload.ts'
 contextBridge.exposeInMainWorld('electronAPI', {
   loadPreferences: () => ipcRenderer.invoke('load-prefs')
 })
 ```
 
-You can create a `interface.d.ts` declaration file and globally augment the `Window` interface:
+You can create a `renderer.d.ts` declaration file and globally augment the `Window` interface:
 
-```ts title='interface.d.ts' @ts-noisolate
+```typescript title='renderer.d.ts'
 export interface IElectronAPI {
   loadPreferences: () => Promise<void>,
 }
@@ -98,7 +98,7 @@ declare global {
 
 Doing so will ensure that the TypeScript compiler will know about the `electronAPI` property on your global `window` object when writing scripts in your renderer process:
 
-```ts title='renderer.ts'
+```typescript title='renderer.ts'
 window.electronAPI.loadPreferences()
 ```
 

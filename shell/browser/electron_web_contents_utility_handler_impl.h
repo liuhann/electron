@@ -5,10 +5,10 @@
 #ifndef ELECTRON_SHELL_BROWSER_ELECTRON_WEB_CONTENTS_UTILITY_HANDLER_IMPL_H_
 #define ELECTRON_SHELL_BROWSER_ELECTRON_WEB_CONTENTS_UTILITY_HANDLER_IMPL_H_
 
+#include <string>
 #include <vector>
 
 #include "base/memory/weak_ptr.h"
-#include "content/public/browser/global_routing_id.h"
 #include "content/public/browser/web_contents_observer.h"
 #include "electron/shell/common/api/api.mojom.h"
 #include "mojo/public/cpp/bindings/associated_receiver.h"
@@ -21,7 +21,7 @@ class RenderFrameHost;
 namespace electron {
 class ElectronWebContentsUtilityHandlerImpl
     : public mojom::ElectronWebContentsUtility,
-      private content::WebContentsObserver {
+      public content::WebContentsObserver {
  public:
   explicit ElectronWebContentsUtilityHandlerImpl(
       content::RenderFrameHost* render_frame_host,
@@ -41,6 +41,8 @@ class ElectronWebContentsUtilityHandlerImpl
 
   // mojom::ElectronWebContentsUtility:
   void OnFirstNonEmptyLayout() override;
+  void UpdateDraggableRegions(
+      std::vector<mojom::DraggableRegionPtr> regions) override;
   void SetTemporaryZoomLevel(double level) override;
   void DoGetZoomLevel(DoGetZoomLevelCallback callback) override;
 
@@ -58,7 +60,8 @@ class ElectronWebContentsUtilityHandlerImpl
 
   content::RenderFrameHost* GetRenderFrameHost();
 
-  content::GlobalRenderFrameHostId render_frame_host_id_;
+  const int render_process_id_;
+  const int render_frame_id_;
 
   mojo::AssociatedReceiver<mojom::ElectronWebContentsUtility> receiver_{this};
 

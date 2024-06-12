@@ -22,51 +22,48 @@
 
 - (id)init {
   if ((self = [super init])) {
-    NSDistributedNotificationCenter* distributed_center =
+    NSDistributedNotificationCenter* distCenter =
         [NSDistributedNotificationCenter defaultCenter];
     // A notification that the screen was locked.
-    [distributed_center addObserver:self
-                           selector:@selector(onScreenLocked:)
-                               name:@"com.apple.screenIsLocked"
-                             object:nil];
+    [distCenter addObserver:self
+                   selector:@selector(onScreenLocked:)
+                       name:@"com.apple.screenIsLocked"
+                     object:nil];
     // A notification that the screen was unlocked by the user.
-    [distributed_center addObserver:self
-                           selector:@selector(onScreenUnlocked:)
-                               name:@"com.apple.screenIsUnlocked"
-                             object:nil];
+    [distCenter addObserver:self
+                   selector:@selector(onScreenUnlocked:)
+                       name:@"com.apple.screenIsUnlocked"
+                     object:nil];
     // A notification that the workspace posts before the machine goes to sleep.
-    [distributed_center addObserver:self
-                           selector:@selector(isSuspending:)
-                               name:NSWorkspaceWillSleepNotification
-                             object:nil];
+    [distCenter addObserver:self
+                   selector:@selector(isSuspending:)
+                       name:NSWorkspaceWillSleepNotification
+                     object:nil];
     // A notification that the workspace posts when the machine wakes from
     // sleep.
-    [distributed_center addObserver:self
-                           selector:@selector(isResuming:)
-                               name:NSWorkspaceDidWakeNotification
-                             object:nil];
-
-    NSNotificationCenter* shared_center =
-        [[NSWorkspace sharedWorkspace] notificationCenter];
-
+    [distCenter addObserver:self
+                   selector:@selector(isResuming:)
+                       name:NSWorkspaceDidWakeNotification
+                     object:nil];
     // A notification that the workspace posts when the user session becomes
     // active.
-    [shared_center addObserver:self
-                      selector:@selector(onUserDidBecomeActive:)
-                          name:NSWorkspaceSessionDidBecomeActiveNotification
-                        object:nil];
+    [distCenter addObserver:self
+                   selector:@selector(onUserDidBecomeActive:)
+                       name:NSWorkspaceSessionDidBecomeActiveNotification
+                     object:nil];
     // A notification that the workspace posts when the user session becomes
     // inactive.
-    [shared_center addObserver:self
-                      selector:@selector(onUserDidResignActive:)
-                          name:NSWorkspaceSessionDidResignActiveNotification
-                        object:nil];
+    [distCenter addObserver:self
+                   selector:@selector(onUserDidResignActive:)
+                       name:NSWorkspaceSessionDidResignActiveNotification
+                     object:nil];
   }
   return self;
 }
 
 - (void)dealloc {
   [[NSDistributedNotificationCenter defaultCenter] removeObserver:self];
+  [super dealloc];
 }
 
 - (void)addEmitter:(electron::api::PowerMonitor*)monitor_ {
@@ -111,7 +108,9 @@
 
 @end
 
-namespace electron::api {
+namespace electron {
+
+namespace api {
 
 static MacLockMonitor* g_lock_monitor = nil;
 
@@ -121,4 +120,6 @@ void PowerMonitor::InitPlatformSpecificMonitors() {
   [g_lock_monitor addEmitter:this];
 }
 
-}  // namespace electron::api
+}  // namespace api
+
+}  // namespace electron

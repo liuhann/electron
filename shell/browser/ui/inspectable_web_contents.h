@@ -6,16 +6,19 @@
 #ifndef ELECTRON_SHELL_BROWSER_UI_INSPECTABLE_WEB_CONTENTS_H_
 #define ELECTRON_SHELL_BROWSER_UI_INSPECTABLE_WEB_CONTENTS_H_
 
+#include <list>
+#include <map>
 #include <memory>
+#include <set>
 #include <string>
+#include <vector>
 
-#include "base/containers/flat_map.h"
-#include "base/containers/flat_set.h"
 #include "base/containers/span.h"
 #include "base/containers/unique_ptr_adapters.h"
-#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
+#include "chrome/browser/devtools/devtools_contents_resizing_strategy.h"
 #include "chrome/browser/devtools/devtools_embedder_message_dispatcher.h"
+#include "chrome/browser/devtools/devtools_settings.h"
 #include "content/public/browser/devtools_agent_host.h"
 #include "content/public/browser/devtools_frontend_host.h"
 #include "content/public/browser/web_contents_delegate.h"
@@ -34,10 +37,13 @@ class InspectableWebContentsView;
 
 class InspectableWebContents
     : public content::DevToolsAgentHostClient,
-      private content::WebContentsObserver,
+      public content::WebContentsObserver,
       public content::WebContentsDelegate,
       public DevToolsEmbedderMessageDispatcher::Delegate {
  public:
+  using List = std::list<InspectableWebContents*>;
+
+  static const List& GetAll();
   static void RegisterPrefs(PrefRegistrySimple* pref_registry);
 
   InspectableWebContents(std::unique_ptr<content::WebContents> web_contents,
@@ -55,30 +61,23 @@ class InspectableWebContents
 
   void SetDelegate(InspectableWebContentsDelegate* delegate);
   InspectableWebContentsDelegate* GetDelegate() const;
-  [[nodiscard]] bool is_guest() const { return is_guest_; }
+  bool IsGuest() const;
   void ReleaseWebContents();
   void SetDevToolsWebContents(content::WebContents* devtools);
   void SetDockState(const std::string& state);
-  void SetDevToolsTitle(const std::u16string& title);
   void ShowDevTools(bool activate);
   void CloseDevTools();
   bool IsDevToolsViewShowing();
-  std::u16string GetDevToolsTitle();
   void AttachTo(scoped_refptr<content::DevToolsAgentHost>);
   void Detach();
-  void CallClientFunction(
-      const std::string& object_name,
-      const std::string& method_name,
-      const base::Value arg1 = {},
-      const base::Value arg2 = {},
-      const base::Value arg3 = {},
-      base::OnceCallback<void(base::Value)> cb = base::NullCallback());
+  void CallClientFunction(const std::string& function_name,
+                          const base::Value* arg1,
+                          const base::Value* arg2,
+                          const base::Value* arg3);
   void InspectElement(int x, int y);
 
   // Return the last position and size of devtools window.
-  [[nodiscard]] const gfx::Rect& dev_tools_bounds() const {
-    return devtools_bounds_;
-  }
+  gfx::Rect GetDevToolsBounds() const;
   void SaveDevToolsBounds(const gfx::Rect& bounds);
 
   // Return the last set zoom level of devtools window.
@@ -86,7 +85,7 @@ class InspectableWebContents
   void UpdateDevToolsZoomLevel(double level);
 
  private:
-  // DevToolsEmbedderMessageDispatcher::Delegate
+  // DevToolsEmbedderMessageDispacher::Delegate
   void ActivateWindow() override;
   void CloseWindow() override;
   void LoadCompleted() override;
@@ -99,12 +98,10 @@ class InspectableWebContents
                            int stream_id) override;
   void SetIsDocked(DispatchCallback callback, bool is_docked) override;
   void OpenInNewTab(const std::string& url) override;
-  void OpenSearchResultsInNewTab(const std::string& query) override;
   void ShowItemInFolder(const std::string& file_system_path) override;
   void SaveToFile(const std::string& url,
                   const std::string& content,
-                  bool save_as,
-                  bool is_base64) override;
+                  bool save_as) override;
   void AppendToFile(const std::string& url,
                     const std::string& content) override;
   void RequestFileSystems() override;
@@ -132,16 +129,13 @@ class InspectableWebContents
       bool network_discovery_enabled,
       const std::string& network_discovery_config) override;
   void SetDevicesUpdatesEnabled(bool enabled) override;
+  void PerformActionOnRemotePage(const std::string& page_id,
+                                 const std::string& action) override;
   void OpenRemotePage(const std::string& browser_id,
                       const std::string& url) override;
   void OpenNodeFrontend() override;
   void DispatchProtocolMessageFromDevToolsFrontend(
       const std::string& message) override;
-  void RecordCountHistogram(const std::string& name,
-                            int sample,
-                            int min,
-                            int exclusive_max,
-                            int buckets) override {}
   void SendJsonRequest(DispatchCallback callback,
                        const std::string& browser_id,
                        const std::string& url) override;
@@ -155,7 +149,6 @@ class InspectableWebContents
   void RemovePreference(const std::string& name) override;
   void ClearPreferences() override;
   void GetSyncInformation(DispatchCallback callback) override;
-  void GetHostConfig(DispatchCallback callback) override;
   void ConnectionReady() override;
   void RegisterExtensionsAPI(const std::string& origin,
                              const std::string& script) override;
@@ -168,24 +161,13 @@ class InspectableWebContents
   void RecordPerformanceHistogram(const std::string& name,
                                   double duration) override {}
   void RecordUserMetricsAction(const std::string& name) override {}
-  void RecordImpression(const ImpressionEvent& event) override {}
-  void RecordResize(const ResizeEvent& event) override {}
-  void RecordClick(const ClickEvent& event) override {}
-  void RecordHover(const HoverEvent& event) override {}
-  void RecordDrag(const DragEvent& event) override {}
-  void RecordChange(const ChangeEvent& event) override {}
-  void RecordKeyDown(const KeyDownEvent& event) override {}
   void ShowSurvey(DispatchCallback callback,
                   const std::string& trigger) override {}
   void CanShowSurvey(DispatchCallback callback,
                      const std::string& trigger) override {}
-  void DoAidaConversation(DispatchCallback callback,
-                          const std::string& request,
-                          int stream_id) override {}
-  void RegisterAidaClientEvent(const std::string& request) override {}
 
   // content::DevToolsFrontendHostDelegate:
-  void HandleMessageFromDevToolsFrontend(base::Value::Dict message);
+  void HandleMessageFromDevToolsFrontend(base::Value message);
 
   // content::DevToolsAgentHostClient:
   void DispatchProtocolMessage(content::DevToolsAgentHost* agent_host,
@@ -205,7 +187,7 @@ class InspectableWebContents
 
   // content::WebContentsDelegate:
   bool HandleKeyboardEvent(content::WebContents*,
-                           const input::NativeWebKeyboardEvent&) override;
+                           const content::NativeWebKeyboardEvent&) override;
   void CloseContents(content::WebContents* source) override;
   void RunFileChooser(content::RenderFrameHost* render_frame_host,
                       scoped_refptr<content::FileSelectListener> listener,
@@ -220,16 +202,15 @@ class InspectableWebContents
   void AddDevToolsExtensionsToClient();
 #endif
 
+  DevToolsContentsResizingStrategy contents_resizing_strategy_;
   gfx::Rect devtools_bounds_;
   bool can_dock_ = true;
   std::string dock_state_;
-  std::u16string devtools_title_;
   bool activate_ = true;
 
-  raw_ptr<InspectableWebContentsDelegate> delegate_ =
-      nullptr;  // weak references.
+  InspectableWebContentsDelegate* delegate_ = nullptr;  // weak references.
 
-  raw_ptr<PrefService> pref_service_;  // weak reference.
+  PrefService* pref_service_;  // weak reference.
 
   std::unique_ptr<content::WebContents> web_contents_;
 
@@ -237,7 +218,7 @@ class InspectableWebContents
   // one assigned by SetDevToolsWebContents.
   std::unique_ptr<content::WebContents> managed_devtools_web_contents_;
   // The external devtools assigned by SetDevToolsWebContents.
-  raw_ptr<content::WebContents> external_devtools_web_contents_ = nullptr;
+  content::WebContents* external_devtools_web_contents_ = nullptr;
 
   bool is_guest_;
   std::unique_ptr<InspectableWebContentsView> view_;
@@ -249,12 +230,11 @@ class InspectableWebContents
       embedder_message_dispatcher_;
 
   class NetworkResourceLoader;
-  base::flat_set<std::unique_ptr<NetworkResourceLoader>,
-                 base::UniquePtrComparator>
+  std::set<std::unique_ptr<NetworkResourceLoader>, base::UniquePtrComparator>
       loaders_;
 
-  // origin -> script
-  base::flat_map<std::string, std::string> extensions_api_;
+  using ExtensionsAPIs = std::map<std::string, std::string>;
+  ExtensionsAPIs extensions_api_;
 
   // Contains the set of synced settings.
   // The DevTools frontend *must* call `Register` for each setting prior to

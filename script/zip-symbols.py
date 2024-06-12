@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from __future__ import print_function
 import argparse
 import glob
 import os
@@ -15,6 +16,8 @@ OUT_DIR = get_out_dir()
 
 def main():
   print('Zipping Symbols')
+  if get_target_arch() == 'mips64el':
+    return
 
   args = parse_args()
   dist_name = 'symbols.zip'

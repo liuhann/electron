@@ -12,7 +12,6 @@
 #include "shell/browser/ui/autofill_popup.h"
 #endif
 
-#include "base/memory/raw_ptr.h"
 #include "mojo/public/cpp/bindings/associated_receiver.h"
 #include "mojo/public/cpp/bindings/pending_associated_receiver.h"
 #include "shell/common/api/api.mojom.h"
@@ -36,7 +35,7 @@ class AutofillDriver : public mojom::ElectronAutofillDriver {
   void HideAutofillPopup() override;
 
  private:
-  raw_ptr<content::RenderFrameHost> const render_frame_host_;
+  content::RenderFrameHost* const render_frame_host_;
 
 #if defined(TOOLKIT_VIEWS)
   std::unique_ptr<AutofillPopup> autofill_popup_;

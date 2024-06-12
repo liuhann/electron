@@ -7,8 +7,7 @@
 #include <string>
 #include <vector>
 
-#include "base/memory/raw_ptr.h"
-#include "base/message_loop/message_pump_apple.h"
+#include "base/message_loop/message_pump_mac.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/task/current_thread.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -20,11 +19,11 @@
 #include "ui/native_theme/native_theme.h"
 
 @interface StatusItemView : NSView {
-  raw_ptr<electron::TrayIconCocoa> trayIcon_;  // weak
-  ElectronMenuController* menuController_;     // weak
+  electron::TrayIconCocoa* trayIcon_;       // weak
+  ElectronMenuController* menuController_;  // weak
   BOOL ignoreDoubleClickEvents_;
-  NSStatusItem* __strong statusItem_;
-  NSTrackingArea* __strong trackingArea_;
+  base::scoped_nsobject<NSStatusItem> statusItem_;
+  base::scoped_nsobject<NSTrackingArea> trackingArea_;
 }
 
 @end  // @interface StatusItemView
@@ -34,6 +33,7 @@
 - (void)dealloc {
   trayIcon_ = nil;
   menuController_ = nil;
+  [super dealloc];
 }
 
 - (id)initWithIcon:(electron::TrayIconCocoa*)icon {
@@ -43,23 +43,15 @@
 
   if ((self = [super initWithFrame:CGRectZero])) {
     [self registerForDraggedTypes:@[
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
       NSFilenamesPboardType,
-#pragma clang diagnostic pop
-      NSPasteboardTypeString,
+      NSStringPboardType,
     ]];
 
     // Create the status item.
     NSStatusItem* item = [[NSStatusBar systemStatusBar]
         statusItemWithLength:NSVariableStatusItemLength];
-    statusItem_ = item;
-    [[statusItem_ button] addSubview:self];
-
-    // We need to set the target and action on the button, otherwise
-    // VoiceOver doesn't know where to send the select action.
-    [[statusItem_ button] setTarget:self];
-    [[statusItem_ button] setAction:@selector(mouseDown:)];
+    statusItem_.reset([item retain]);
+    [[statusItem_ button] addSubview:self];  // inject custom view
     [self updateDimensions];
   }
   return self;
@@ -73,12 +65,12 @@
   // Use NSTrackingArea for listening to mouseEnter, mouseExit, and mouseMove
   // events.
   [self removeTrackingArea:trackingArea_];
-  trackingArea_ = [[NSTrackingArea alloc]
+  trackingArea_.reset([[NSTrackingArea alloc]
       initWithRect:[self bounds]
            options:NSTrackingMouseEnteredAndExited | NSTrackingMouseMoved |
                    NSTrackingActiveAlways
              owner:self
-          userInfo:nil];
+          userInfo:nil]);
   [self addTrackingArea:trackingArea_];
 }
 
@@ -86,16 +78,11 @@
   // Turn off tracking events to prevent crash.
   if (trackingArea_) {
     [self removeTrackingArea:trackingArea_];
-    trackingArea_ = nil;
+    trackingArea_.reset();
   }
-
-  // Ensure any open menu is closed.
-  if ([statusItem_ menu])
-    [[statusItem_ menu] cancelTracking];
-
   [[NSStatusBar systemStatusBar] removeStatusItem:statusItem_];
   [self removeFromSuperview];
-  statusItem_ = nil;
+  statusItem_.reset();
 }
 
 - (void)setImage:(NSImage*)image {
@@ -135,13 +122,16 @@
   // Change font type, if specified
   CGFloat existing_size = [[[statusItem_ button] font] pointSize];
   if ([font_type isEqualToString:@"monospaced"]) {
-    NSDictionary* attributes = @{
-      NSFontAttributeName :
-          [NSFont monospacedSystemFontOfSize:existing_size
-                                      weight:NSFontWeightRegular]
-    };
-    [attributed_title addAttributes:attributes
-                              range:NSMakeRange(0, [attributed_title length])];
+    if (@available(macOS 10.15, *)) {
+      NSDictionary* attributes = @{
+        NSFontAttributeName :
+            [NSFont monospacedSystemFontOfSize:existing_size
+                                        weight:NSFontWeightRegular]
+      };
+      [attributed_title
+          addAttributes:attributes
+                  range:NSMakeRange(0, [attributed_title length])];
+    }
   } else if ([font_type isEqualToString:@"monospacedDigit"]) {
     NSDictionary* attributes = @{
       NSFontAttributeName :
@@ -195,25 +185,6 @@
 }
 
 - (void)mouseDown:(NSEvent*)event {
-  // If |event| does not respond to locationInWindow, we've
-  // arrived here from VoiceOver, which does not pass an event.
-  // Create a synthetic event to pass to the click handler.
-  if (![event respondsToSelector:@selector(locationInWindow)]) {
-    event = [NSEvent mouseEventWithType:NSEventTypeRightMouseDown
-                               location:NSMakePoint(0, 0)
-                          modifierFlags:0
-                              timestamp:NSApp.currentEvent.timestamp
-                           windowNumber:0
-                                context:nil
-                            eventNumber:0
-                             clickCount:1
-                               pressure:1.0];
-
-    // We also need to explicitly call the click handler here, since
-    // VoiceOver won't trigger mouseUp.
-    [self handleClickNotifications:event];
-  }
-
   trayIcon_->NotifyMouseDown(
       gfx::ScreenPointFromNSPoint([event locationInWindow]),
       ui::EventFlagsFromModifiers([event modifierFlags]));
@@ -240,31 +211,32 @@
 
 - (void)popUpContextMenu:(electron::ElectronMenuModel*)menu_model {
   // Make sure events can be pumped while the menu is up.
-  base::CurrentThread::ScopedAllowApplicationTasksInNativeNestedLoop allow;
+  base::CurrentThread::ScopedNestableTaskAllower allow;
 
   // Show a custom menu.
   if (menu_model) {
-    ElectronMenuController* menuController =
+    base::scoped_nsobject<ElectronMenuController> menuController(
         [[ElectronMenuController alloc] initWithModel:menu_model
-                                useDefaultAccelerator:NO];
+                                useDefaultAccelerator:NO]);
     // Hacky way to mimic design of ordinary tray menu.
     [statusItem_ setMenu:[menuController menu]];
-    base::WeakPtr<electron::TrayIconCocoa> weak_tray_icon =
-        trayIcon_->GetWeakPtr();
+    // -performClick: is a blocking call, which will run the task loop inside
+    // itself. This can potentially include running JS, which can result in
+    // this object being released. We take a temporary reference here to make
+    // sure we stay alive long enough to successfully return from this
+    // function.
+    // TODO(nornagon/codebytere): Avoid nesting task loops here.
+    [self retain];
     [[statusItem_ button] performClick:self];
-    // /⚠️ \ Warning! Arbitrary JavaScript and who knows what else has been run
-    // during -performClick:. This object may have been deleted.
-    // We check if |trayIcon_| is still alive as it owns us and has the same
-    // lifetime.
-    if (!weak_tray_icon)
-      return;
     [statusItem_ setMenu:[menuController_ menu]];
+    [self release];
     return;
   }
 
   if (menuController_ && ![menuController_ isMenuOpen]) {
     // Ensure the UI can update while the menu is fading out.
     base::ScopedPumpMessagesInPrivateModes pump_private;
+
     [[statusItem_ button] performClick:self];
   }
 }
@@ -319,10 +291,6 @@
 - (BOOL)handleDrop:(id<NSDraggingInfo>)sender {
   NSPasteboard* pboard = [sender draggingPasteboard];
 
-// TODO(codebytere): update to currently supported NSPasteboardTypeFileURL or
-// kUTTypeFileURL.
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
   if ([[pboard types] containsObject:NSFilenamesPboardType]) {
     std::vector<std::string> dropFiles;
     NSArray* files = [pboard propertyListForType:NSFilenamesPboardType];
@@ -330,12 +298,12 @@
       dropFiles.push_back(base::SysNSStringToUTF8(file));
     trayIcon_->NotifyDropFiles(dropFiles);
     return YES;
-  } else if ([[pboard types] containsObject:NSPasteboardTypeString]) {
-    NSString* dropText = [pboard stringForType:NSPasteboardTypeString];
+  } else if ([[pboard types] containsObject:NSStringPboardType]) {
+    NSString* dropText = [pboard stringForType:NSStringPboardType];
     trayIcon_->NotifyDropText(base::SysNSStringToUTF8(dropText));
     return YES;
   }
-#pragma clang diagnostic pop
+
   return NO;
 }
 
@@ -353,7 +321,7 @@
 namespace electron {
 
 TrayIconCocoa::TrayIconCocoa() {
-  status_item_view_ = [[StatusItemView alloc] initWithIcon:this];
+  status_item_view_.reset([[StatusItemView alloc] initWithIcon:this]);
 }
 
 TrayIconCocoa::~TrayIconCocoa() {
@@ -390,31 +358,31 @@ bool TrayIconCocoa::GetIgnoreDoubleClickEvents() {
   return [status_item_view_ getIgnoreDoubleClickEvents];
 }
 
-void TrayIconCocoa::PopUpOnUI(base::WeakPtr<ElectronMenuModel> menu_model) {
-  [status_item_view_ popUpContextMenu:menu_model.get()];
+void TrayIconCocoa::PopUpOnUI(ElectronMenuModel* menu_model) {
+  [status_item_view_ popUpContextMenu:menu_model];
 }
 
-void TrayIconCocoa::PopUpContextMenu(
-    const gfx::Point& pos,
-    base::WeakPtr<ElectronMenuModel> menu_model) {
+void TrayIconCocoa::PopUpContextMenu(const gfx::Point& pos,
+                                     ElectronMenuModel* menu_model) {
   content::GetUIThreadTaskRunner({})->PostTask(
-      FROM_HERE, base::BindOnce(&TrayIconCocoa::PopUpOnUI,
-                                weak_factory_.GetWeakPtr(), menu_model));
+      FROM_HERE,
+      base::BindOnce(&TrayIconCocoa::PopUpOnUI, weak_factory_.GetWeakPtr(),
+                     base::Unretained(menu_model)));
 }
 
 void TrayIconCocoa::CloseContextMenu() {
   [status_item_view_ closeContextMenu];
 }
 
-void TrayIconCocoa::SetContextMenu(raw_ptr<ElectronMenuModel> menu_model) {
+void TrayIconCocoa::SetContextMenu(ElectronMenuModel* menu_model) {
   if (menu_model) {
     // Create native menu.
-    menu_ = [[ElectronMenuController alloc] initWithModel:menu_model
-                                    useDefaultAccelerator:NO];
+    menu_.reset([[ElectronMenuController alloc] initWithModel:menu_model
+                                        useDefaultAccelerator:NO]);
   } else {
-    menu_ = nil;
+    menu_.reset();
   }
-  [status_item_view_ setMenuController:menu_];
+  [status_item_view_ setMenuController:menu_.get()];
 }
 
 gfx::Rect TrayIconCocoa::GetBounds() {
@@ -422,7 +390,7 @@ gfx::Rect TrayIconCocoa::GetBounds() {
 }
 
 // static
-TrayIcon* TrayIcon::Create(std::optional<UUID> guid) {
+TrayIcon* TrayIcon::Create(absl::optional<UUID> guid) {
   return new TrayIconCocoa;
 }
 

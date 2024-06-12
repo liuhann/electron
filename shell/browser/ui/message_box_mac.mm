@@ -4,16 +4,17 @@
 
 #include "shell/browser/ui/message_box.h"
 
+#include <map>
 #include <string>
 #include <utility>
 #include <vector>
 
 #import <Cocoa/Cocoa.h>
 
+#include "base/callback.h"
 #include "base/containers/contains.h"
-#include "base/containers/flat_map.h"
-#include "base/functional/callback.h"
 #include "base/mac/mac_util.h"
+#include "base/mac/scoped_nsobject.h"
 #include "base/no_destructor.h"
 #include "base/strings/sys_string_conversions.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -31,8 +32,8 @@ MessageBoxSettings::~MessageBoxSettings() = default;
 namespace {
 
 // <ID, messageBox> map
-base::flat_map<int, NSAlert*>& GetDialogsMap() {
-  static base::NoDestructor<base::flat_map<int, NSAlert*>> dialogs;
+std::map<int, NSAlert*>& GetDialogsMap() {
+  static base::NoDestructor<std::map<int, NSAlert*>> dialogs;
   return *dialogs;
 }
 
@@ -70,42 +71,39 @@ NSAlert* CreateNSAlert(const MessageBoxSettings& settings) {
   int button_count = static_cast<int>([ns_buttons count]);
 
   if (settings.default_id >= 0 && settings.default_id < button_count) {
+    // Highlight the button at default_id
+    [[ns_buttons objectAtIndex:settings.default_id] highlight:YES];
+
     // The first button added gets set as the default selected, so remove
     // that and set the button @ default_id to be default.
     [[ns_buttons objectAtIndex:0] setKeyEquivalent:@""];
     [[ns_buttons objectAtIndex:settings.default_id] setKeyEquivalent:@"\r"];
   }
 
-  if (button_count > 1 && settings.cancel_id >= 0) {
-    // Bind cancel id button to escape key if there is more than one button.
-    if (settings.cancel_id < button_count) {
-      [[ns_buttons objectAtIndex:settings.cancel_id] setKeyEquivalent:@"\e"];
-    }
-
-    // TODO(@codebytere): This behavior violates HIG & should be deprecated.
-    if (settings.cancel_id == settings.default_id) {
-      [[ns_buttons objectAtIndex:settings.default_id] highlight:YES];
-    }
+  // Bind cancel id button to escape key if there is more than one button
+  if (button_count > 1 && settings.cancel_id >= 0 &&
+      settings.cancel_id < button_count) {
+    [[ns_buttons objectAtIndex:settings.cancel_id] setKeyEquivalent:@"\e"];
   }
 
   if (!settings.checkbox_label.empty()) {
     alert.showsSuppressionButton = YES;
     alert.suppressionButton.title =
         base::SysUTF8ToNSString(settings.checkbox_label);
-    alert.suppressionButton.state = settings.checkbox_checked
-                                        ? NSControlStateValueOn
-                                        : NSControlStateValueOff;
+    alert.suppressionButton.state =
+        settings.checkbox_checked ? NSOnState : NSOffState;
   }
 
   if (!settings.icon.isNull()) {
-    NSImage* image = skia::SkBitmapToNSImage(*settings.icon.bitmap());
+    NSImage* image = skia::SkBitmapToNSImageWithColorSpace(
+        *settings.icon.bitmap(), base::mac::GetGenericRGBColorSpace());
     [alert setIcon:image];
   }
 
   if (settings.text_width > 0) {
     NSRect rect = NSMakeRect(0, 0, settings.text_width, 0);
     NSView* accessoryView = [[NSView alloc] initWithFrame:rect];
-    [alert setAccessoryView:accessoryView];
+    [alert setAccessoryView:[accessoryView autorelease]];
   }
 
   return alert;
@@ -114,7 +112,7 @@ NSAlert* CreateNSAlert(const MessageBoxSettings& settings) {
 }  // namespace
 
 int ShowMessageBoxSync(const MessageBoxSettings& settings) {
-  NSAlert* alert(CreateNSAlert(settings));
+  base::scoped_nsobject<NSAlert> alert(CreateNSAlert(settings));
 
   // Use runModal for synchronous alert without parent, since we don't have a
   // window to wait for. Also use it when window is provided but it is not
@@ -144,9 +142,8 @@ void ShowMessageBox(const MessageBoxSettings& settings,
   // Use runModal for synchronous alert without parent, since we don't have a
   // window to wait for.
   if (!settings.parent_window) {
-    int ret = [alert runModal];
-    std::move(callback).Run(
-        ret, alert.suppressionButton.state == NSControlStateValueOn);
+    int ret = [[alert autorelease] runModal];
+    std::move(callback).Run(ret, alert.suppressionButton.state == NSOnState);
   } else {
     if (settings.id) {
       if (base::Contains(GetDialogsMap(), *settings.id))
@@ -162,7 +159,7 @@ void ShowMessageBox(const MessageBoxSettings& settings,
     // Duplicate the callback object here since c is a reference and gcd would
     // only store the pointer, by duplication we can force gcd to store a copy.
     __block MessageBoxCallback callback_ = std::move(callback);
-    __block std::optional<int> id = std::move(settings.id);
+    __block absl::optional<int> id = std::move(settings.id);
     __block int cancel_id = settings.cancel_id;
 
     auto handler = ^(NSModalResponse response) {
@@ -173,7 +170,8 @@ void ShowMessageBox(const MessageBoxSettings& settings,
       // CloseMessageBox API, and we should return cancelId as result.
       if (response < 0)
         response = cancel_id;
-      bool suppressed = alert.suppressionButton.state == NSControlStateValueOn;
+      bool suppressed = alert.suppressionButton.state == NSOnState;
+      [alert release];
       // The completionHandler runs inside a transaction commit, and we should
       // not do any runModal inside it. However since we can not control what
       // users will run in the callback, we have to delay running the callback
@@ -202,6 +200,7 @@ void ShowErrorBox(const std::u16string& title, const std::u16string& content) {
   [alert setInformativeText:base::SysUTF16ToNSString(content)];
   [alert setAlertStyle:NSAlertStyleCritical];
   [alert runModal];
+  [alert release];
 }
 
 }  // namespace electron

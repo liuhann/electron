@@ -8,8 +8,8 @@
 
 #include "base/files/file_util.h"
 #include "base/logging.h"
+#include "base/threading/thread_restrictions.h"
 #include "shell/common/asar/asar_util.h"
-#include "shell/common/thread_restrictions.h"
 
 namespace asar {
 
@@ -17,7 +17,7 @@ ScopedTemporaryFile::ScopedTemporaryFile() = default;
 
 ScopedTemporaryFile::~ScopedTemporaryFile() {
   if (!path_.empty()) {
-    electron::ScopedAllowBlockingForElectron allow_blocking;
+    base::ThreadRestrictions::ScopedAllowIO allow_io;
     // On Windows it is very likely the file is already in use (because it is
     // mostly used for Node native modules), so deleting it now will halt the
     // program.
@@ -33,7 +33,7 @@ bool ScopedTemporaryFile::Init(const base::FilePath::StringType& ext) {
   if (!path_.empty())
     return true;
 
-  electron::ScopedAllowBlockingForElectron allow_blocking;
+  base::ThreadRestrictions::ScopedAllowIO allow_io;
   if (!base::CreateTemporaryFile(&path_))
     return false;
 
@@ -55,14 +55,14 @@ bool ScopedTemporaryFile::InitFromFile(
     const base::FilePath::StringType& ext,
     uint64_t offset,
     uint64_t size,
-    const std::optional<IntegrityPayload>& integrity) {
+    const absl::optional<IntegrityPayload>& integrity) {
   if (!src->IsValid())
     return false;
 
   if (!Init(ext))
     return false;
 
-  electron::ScopedAllowBlockingForElectron allow_blocking;
+  base::ThreadRestrictions::ScopedAllowIO allow_io;
   std::vector<char> buf(size);
   int len = src->Read(offset, buf.data(), buf.size());
   if (len != static_cast<int>(size))

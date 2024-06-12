@@ -18,17 +18,15 @@ NodeBindingsMac::NodeBindingsMac(BrowserEnvironment browser_env)
     : NodeBindings(browser_env) {}
 
 void NodeBindingsMac::PollEvents() {
-  auto* const event_loop = uv_loop();
-
   struct timeval tv;
-  int timeout = uv_backend_timeout(event_loop);
+  int timeout = uv_backend_timeout(uv_loop_);
   if (timeout != -1) {
     tv.tv_sec = timeout / 1000;
     tv.tv_usec = (timeout % 1000) * 1000;
   }
 
   fd_set readset;
-  int fd = uv_backend_fd(event_loop);
+  int fd = uv_backend_fd(uv_loop_);
   FD_ZERO(&readset);
   FD_SET(fd, &readset);
 

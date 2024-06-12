@@ -4,7 +4,6 @@
 
 #include "shell/browser/api/electron_api_protocol.h"
 
-#include <string_view>
 #include <vector>
 
 #include "base/command_line.h"
@@ -33,9 +32,6 @@ std::vector<std::string> g_standard_schemes;
 // List of registered custom streaming schemes.
 std::vector<std::string> g_streaming_schemes;
 
-// Schemes that support V8 code cache.
-std::vector<std::string> g_code_cache_schemes;
-
 struct SchemeOptions {
   bool standard = false;
   bool secure = false;
@@ -44,7 +40,6 @@ struct SchemeOptions {
   bool supportFetchAPI = false;
   bool corsEnabled = false;
   bool stream = false;
-  bool codeCache = false;
 };
 
 struct CustomScheme {
@@ -76,7 +71,6 @@ struct Converter<CustomScheme> {
       opt.Get("supportFetchAPI", &(out->options.supportFetchAPI));
       opt.Get("corsEnabled", &(out->options.corsEnabled));
       opt.Get("stream", &(out->options.stream));
-      opt.Get("codeCache", &(out->options.codeCache));
     }
     return true;
   }
@@ -84,16 +78,13 @@ struct Converter<CustomScheme> {
 
 }  // namespace gin
 
-namespace electron::api {
+namespace electron {
+namespace api {
 
 gin::WrapperInfo Protocol::kWrapperInfo = {gin::kEmbedderNativeGin};
 
-const std::vector<std::string>& GetStandardSchemes() {
+std::vector<std::string> GetStandardSchemes() {
   return g_standard_schemes;
-}
-
-const std::vector<std::string>& GetCodeCacheSchemes() {
-  return g_code_cache_schemes;
 }
 
 void AddServiceWorkerScheme(const std::string& scheme) {
@@ -112,15 +103,6 @@ void RegisterSchemesAsPrivileged(gin_helper::ErrorThrower thrower,
   if (!gin::ConvertFromV8(thrower.isolate(), val, &custom_schemes)) {
     thrower.ThrowError("Argument must be an array of custom schemes.");
     return;
-  }
-
-  for (const auto& custom_scheme : custom_schemes) {
-    if (custom_scheme.options.codeCache && !custom_scheme.options.standard) {
-      thrower.ThrowError(
-          "Code cache can only be enabled when the custom scheme is registered "
-          "as standard scheme.");
-      return;
-    }
   }
 
   std::vector<std::string> secure_schemes, cspbypassing_schemes, fetch_schemes,
@@ -156,16 +138,10 @@ void RegisterSchemesAsPrivileged(gin_helper::ErrorThrower thrower,
     if (custom_scheme.options.stream) {
       g_streaming_schemes.push_back(custom_scheme.scheme);
     }
-    if (custom_scheme.options.codeCache) {
-      g_code_cache_schemes.push_back(custom_scheme.scheme);
-      url::AddCodeCacheScheme(custom_scheme.scheme.c_str());
-    }
   }
 
   const auto AppendSchemesToCmdLine = [](const char* switch_name,
                                          std::vector<std::string> schemes) {
-    if (schemes.empty())
-      return;
     // Add the schemes to command line switches, so child processes can also
     // register them.
     base::CommandLine::ForCurrentProcess()->AppendSwitchASCII(
@@ -183,8 +159,6 @@ void RegisterSchemesAsPrivileged(gin_helper::ErrorThrower thrower,
                          g_standard_schemes);
   AppendSchemesToCmdLine(electron::switches::kStreamingSchemes,
                          g_streaming_schemes);
-  AppendSchemesToCmdLine(electron::switches::kCodeCacheSchemes,
-                         g_code_cache_schemes);
 }
 
 namespace {
@@ -194,7 +168,7 @@ const char* const kBuiltinSchemes[] = {
 };
 
 // Convert error code to string.
-constexpr std::string_view ErrorCodeToString(ProtocolError error) {
+std::string ErrorCodeToString(ProtocolError error) {
   switch (error) {
     case ProtocolError::kRegistered:
       return "The scheme has been registered";
@@ -232,7 +206,7 @@ bool Protocol::UnregisterProtocol(const std::string& scheme,
 }
 
 bool Protocol::IsProtocolRegistered(const std::string& scheme) {
-  return protocol_registry_->FindRegistered(scheme) != nullptr;
+  return protocol_registry_->IsProtocolRegistered(scheme);
 }
 
 ProtocolError Protocol::InterceptProtocol(ProtocolType type,
@@ -251,7 +225,7 @@ bool Protocol::UninterceptProtocol(const std::string& scheme,
 }
 
 bool Protocol::IsProtocolIntercepted(const std::string& scheme) {
-  return protocol_registry_->FindIntercepted(scheme) != nullptr;
+  return protocol_registry_->IsProtocolIntercepted(scheme);
 }
 
 v8::Local<v8::Promise> Protocol::IsProtocolHandled(const std::string& scheme,
@@ -300,17 +274,9 @@ gin::Handle<Protocol> Protocol::Create(
       isolate, new Protocol(isolate, browser_context->protocol_registry()));
 }
 
-// static
-gin::Handle<Protocol> Protocol::New(gin_helper::ErrorThrower thrower) {
-  thrower.ThrowError("Protocol cannot be created from JS");
-  return gin::Handle<Protocol>();
-}
-
-// static
-v8::Local<v8::ObjectTemplate> Protocol::FillObjectTemplate(
-    v8::Isolate* isolate,
-    v8::Local<v8::ObjectTemplate> tmpl) {
-  return gin::ObjectTemplateBuilder(isolate, GetClassName(), tmpl)
+gin::ObjectTemplateBuilder Protocol::GetObjectTemplateBuilder(
+    v8::Isolate* isolate) {
+  return gin::Wrappable<Protocol>::GetObjectTemplateBuilder(isolate)
       .SetMethod("registerStringProtocol",
                  &Protocol::RegisterProtocolFor<ProtocolType::kString>)
       .SetMethod("registerBufferProtocol",
@@ -339,15 +305,15 @@ v8::Local<v8::ObjectTemplate> Protocol::FillObjectTemplate(
       .SetMethod("interceptProtocol",
                  &Protocol::InterceptProtocolFor<ProtocolType::kFree>)
       .SetMethod("uninterceptProtocol", &Protocol::UninterceptProtocol)
-      .SetMethod("isProtocolIntercepted", &Protocol::IsProtocolIntercepted)
-      .Build();
+      .SetMethod("isProtocolIntercepted", &Protocol::IsProtocolIntercepted);
 }
 
 const char* Protocol::GetTypeName() {
-  return GetClassName();
+  return "Protocol";
 }
 
-}  // namespace electron::api
+}  // namespace api
+}  // namespace electron
 
 namespace {
 
@@ -369,11 +335,10 @@ void Initialize(v8::Local<v8::Object> exports,
                 void* priv) {
   v8::Isolate* isolate = context->GetIsolate();
   gin_helper::Dictionary dict(isolate, exports);
-  dict.Set("Protocol", electron::api::Protocol::GetConstructor(context));
   dict.SetMethod("registerSchemesAsPrivileged", &RegisterSchemesAsPrivileged);
   dict.SetMethod("getStandardSchemes", &electron::api::GetStandardSchemes);
 }
 
 }  // namespace
 
-NODE_LINKED_BINDING_CONTEXT_AWARE(electron_browser_protocol, Initialize)
+NODE_LINKED_MODULE_CONTEXT_AWARE(electron_browser_protocol, Initialize)

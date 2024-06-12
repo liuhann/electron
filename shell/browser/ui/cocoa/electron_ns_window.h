@@ -5,7 +5,6 @@
 #ifndef ELECTRON_SHELL_BROWSER_UI_COCOA_ELECTRON_NS_WINDOW_H_
 #define ELECTRON_SHELL_BROWSER_UI_COCOA_ELECTRON_NS_WINDOW_H_
 
-#include "base/memory/raw_ptr.h"
 #include "components/remote_cocoa/app_shim/native_widget_mac_nswindow.h"
 #include "shell/browser/ui/cocoa/event_dispatching_window.h"
 #include "ui/views/widget/native_widget_mac.h"
@@ -31,7 +30,7 @@ class ScopedDisableResize {
 
 @interface ElectronNSWindow : NativeWidgetMacNSWindow {
  @private
-  raw_ptr<electron::NativeWindowMac> shell_;
+  electron::NativeWindowMac* shell_;
 }
 @property BOOL acceptsFirstMouse;
 @property BOOL enableLargerThanScreen;
@@ -44,7 +43,7 @@ class ScopedDisableResize {
 - (electron::NativeWindowMac*)shell;
 - (id)accessibilityFocusedUIElement;
 - (NSRect)originalContentRectForFrameRect:(NSRect)frameRect;
-- (BOOL)toggleFullScreenMode:(id)sender;
+- (void)toggleFullScreenMode:(id)sender;
 - (NSImage*)_cornerMask;
 @end
 

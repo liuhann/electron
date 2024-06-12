@@ -7,7 +7,9 @@
 
 #include "base/dcheck_is_on.h"
 
-namespace electron::safestorage {
+namespace electron {
+
+namespace safestorage {
 
 // Used in a DCHECK to validate that our assumption that the network context
 // manager has initialized before app ready holds true. Only used in the
@@ -16,6 +18,8 @@ namespace electron::safestorage {
 void SetElectronCryptoReady(bool ready);
 #endif
 
-}  // namespace electron::safestorage
+}  // namespace safestorage
+
+}  // namespace electron
 
 #endif  // ELECTRON_SHELL_BROWSER_API_ELECTRON_API_SAFE_STORAGE_H_

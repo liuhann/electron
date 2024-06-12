@@ -12,7 +12,7 @@ Electron's [autoUpdater](../api/auto-updater.md) module.
 
 ## Using update.electronjs.org
 
-The Electron team maintains [update.electronjs.org][], a free and open-source
+The Electron team maintains [update.electronjs.org], a free and open-source
 webservice that Electron apps can use to self-update. The service is designed
 for Electron apps that meet the following criteria:
 
@@ -21,7 +21,7 @@ for Electron apps that meet the following criteria:
 - Builds are published to [GitHub Releases][gh-releases]
 - Builds are [code-signed](./code-signing.md)
 
-The easiest way to use this service is by installing [update-electron-app][],
+The easiest way to use this service is by installing [update-electron-app],
 a Node.js module preconfigured for use with update.electronjs.org.
 
 Install the module using your Node.js package manager of choice:
@@ -32,7 +32,7 @@ npm install update-electron-app
 
 Then, invoke the updater from your app's main process file:
 
-```js title="main.js" @ts-nocheck
+```js title="main.js"
 require('update-electron-app')()
 ```
 
@@ -67,7 +67,7 @@ Depending on your needs, you can choose from one of these:
   to minify server cost.
 
 Once you've deployed your update server, you can instrument your app code to receive and
-apply the updates with Electron's [autoUpdater](../api/auto-updater.md) module.
+apply the updates with Electron's [autoUpdater] module.
 
 ### Step 2: Receiving updates in your app
 
@@ -81,14 +81,14 @@ You can use the [app.isPackaged](../api/app.md#appispackaged-readonly) API to ch
 
 :::
 
-```js title='main.js'
+```javascript title='main.js'
 const { app, autoUpdater, dialog } = require('electron')
 ```
 
 Next, construct the URL of the update server feed and tell
 [autoUpdater](../api/auto-updater.md) about it:
 
-```js title='main.js'
+```javascript title='main.js'
 const server = 'https://your-deployment-url.com'
 const url = `${server}/update/${process.platform}/${app.getVersion()}`
 
@@ -97,14 +97,15 @@ autoUpdater.setFeedURL({ url })
 
 As the final step, check for updates. The example below will check every minute:
 
-```js title='main.js'
+```javascript title='main.js'
 setInterval(() => {
   autoUpdater.checkForUpdates()
 }, 60000)
 ```
 
 Once your application is [packaged](./application-distribution.md),
-it will receive an update for each new [GitHub Release][gh-releases] that you
+it will receive an update for each new
+[GitHub Release](https://help.github.com/articles/creating-releases/) that you
 publish.
 
 ### Step 3: Notifying users when updates are available
@@ -113,7 +114,7 @@ Now that you've configured the basic update mechanism for your application, you
 need to ensure that the user will get notified when there's an update. This
 can be achieved using the [autoUpdater API events](../api/auto-updater.md#events):
 
-```js title="main.js" @ts-expect-error=[11]
+```javascript title="main.js"
 autoUpdater.on('update-downloaded', (event, releaseNotes, releaseName) => {
   const dialogOpts = {
     type: 'info',
@@ -121,7 +122,7 @@ autoUpdater.on('update-downloaded', (event, releaseNotes, releaseName) => {
     title: 'Application Update',
     message: process.platform === 'win32' ? releaseNotes : releaseName,
     detail:
-      'A new version has been downloaded. Restart the application to apply the updates.'
+      'A new version has been downloaded. Restart the application to apply the updates.',
   }
 
   dialog.showMessageBox(dialogOpts).then((returnValue) => {
@@ -134,7 +135,7 @@ Also make sure that errors are
 [being handled](../api/auto-updater.md#event-error). Here's an example
 for logging them to `stderr`:
 
-```js title="main.js"
+```javascript title="main.js"
 autoUpdater.on('error', (message) => {
   console.error('There was a problem updating the application')
   console.error(message)
@@ -154,7 +155,7 @@ server-communication aspect of the process by loading your update from a local d
 [vercel]: https://vercel.com
 [hazel]: https://github.com/vercel/hazel
 [nuts]: https://github.com/GitbookIO/nuts
-[gh-releases]: https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository#creating-a-release
+[gh-releases]: https://help.github.com/articles/creating-releases/
 [electron-release-server]: https://github.com/ArekSredzki/electron-release-server
 [nucleus]: https://github.com/atlassian/nucleus
 [update.electronjs.org]: https://github.com/electron/update.electronjs.org

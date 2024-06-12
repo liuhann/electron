@@ -7,14 +7,17 @@
 
 #import <Foundation/Foundation.h>
 
-#include "base/values.h"
+namespace base {
+class ListValue;
+class DictionaryValue;
+}  // namespace base
 
 namespace electron {
 
-NSArray* ListValueToNSArray(const base::Value::List& value);
-base::Value::List NSArrayToValue(NSArray* arr);
-NSDictionary* DictionaryValueToNSDictionary(const base::Value::Dict& value);
-base::Value::Dict NSDictionaryToValue(NSDictionary* dict);
+NSArray* ListValueToNSArray(const base::ListValue& value);
+base::ListValue NSArrayToListValue(NSArray* arr);
+NSDictionary* DictionaryValueToNSDictionary(const base::DictionaryValue& value);
+base::DictionaryValue NSDictionaryToDictionaryValue(NSDictionary* dict);
 
 }  // namespace electron
 

@@ -21,7 +21,9 @@
 #include "ui/gfx/sys_color_change_listener.h"
 #endif
 
-namespace electron::api {
+namespace electron {
+
+namespace api {
 
 #if BUILDFLAG(IS_MAC)
 enum class NotificationCenterKind {
@@ -65,25 +67,25 @@ class SystemPreferences
   void OnSysColorChange() override;
 
   // BrowserObserver:
-  void OnFinishLaunching(base::Value::Dict launch_info) override;
+  void OnFinishLaunching(const base::DictionaryValue& launch_info) override;
 
 #elif BUILDFLAG(IS_MAC)
   using NotificationCallback = base::RepeatingCallback<
-      void(const std::string&, base::Value, const std::string&)>;
+      void(const std::string&, base::DictionaryValue, const std::string&)>;
 
   void PostNotification(const std::string& name,
-                        base::Value::Dict user_info,
+                        base::DictionaryValue user_info,
                         gin::Arguments* args);
   int SubscribeNotification(v8::Local<v8::Value> maybe_name,
                             const NotificationCallback& callback);
   void UnsubscribeNotification(int id);
   void PostLocalNotification(const std::string& name,
-                             base::Value::Dict user_info);
+                             base::DictionaryValue user_info);
   int SubscribeLocalNotification(v8::Local<v8::Value> maybe_name,
                                  const NotificationCallback& callback);
   void UnsubscribeLocalNotification(int request_id);
   void PostWorkspaceNotification(const std::string& name,
-                                 base::Value::Dict user_info);
+                                 base::DictionaryValue user_info);
   int SubscribeWorkspaceNotification(v8::Local<v8::Value> maybe_name,
                                      const NotificationCallback& callback);
   void UnsubscribeWorkspaceNotification(int request_id);
@@ -96,7 +98,6 @@ class SystemPreferences
                       gin::Arguments* args);
   void RemoveUserDefault(const std::string& name);
   bool IsSwipeTrackingFromScrollEventsEnabled();
-  bool AccessibilityDisplayShouldReduceTransparency();
 
   std::string GetSystemColor(gin_helper::ErrorThrower thrower,
                              const std::string& color);
@@ -113,7 +114,11 @@ class SystemPreferences
   // TODO(MarshallOfSound): Write tests for these methods once we
   // are running tests on a Mojave machine
   v8::Local<v8::Value> GetEffectiveAppearance(v8::Isolate* isolate);
+  v8::Local<v8::Value> GetAppLevelAppearance(v8::Isolate* isolate);
+  void SetAppLevelAppearance(gin::Arguments* args);
 #endif
+  bool IsInvertedColorScheme();
+  bool IsHighContrastColorScheme();
   v8::Local<v8::Value> GetAnimationSettings(v8::Isolate* isolate);
 
   // disable copy
@@ -155,10 +160,16 @@ class SystemPreferences
 
   std::string current_color_;
 
+  bool invertered_color_scheme_ = false;
+
+  bool high_contrast_color_scheme_ = false;
+
   std::unique_ptr<gfx::ScopedSysColorChangeListener> color_change_listener_;
 #endif
 };
 
-}  // namespace electron::api
+}  // namespace api
+
+}  // namespace electron
 
 #endif  // ELECTRON_SHELL_BROWSER_API_ELECTRON_API_SYSTEM_PREFERENCES_H_

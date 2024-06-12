@@ -1,7 +1,7 @@
-import * as cp from 'node:child_process';
+import * as cp from 'child_process';
 import * as fs from 'fs-extra';
-import * as os from 'node:os';
-import * as path from 'node:path';
+import * as os from 'os';
+import * as path from 'path';
 
 const rootPath = path.resolve(__dirname, '..');
 const gniPath = path.resolve(__dirname, '../filenames.auto.gni');
@@ -38,12 +38,8 @@ const main = async () => {
       config: 'webpack.config.worker.js'
     },
     {
-      name: 'node_bundle_deps',
-      config: 'webpack.config.node.js'
-    },
-    {
-      name: 'utility_bundle_deps',
-      config: 'webpack.config.utility.js'
+      name: 'asar_bundle_deps',
+      config: 'webpack.config.asar.js'
     }
   ];
 
@@ -52,10 +48,10 @@ const main = async () => {
     const child = cp.spawn('node', [
       './node_modules/webpack-cli/bin/cli.js',
       '--config', `./build/webpack/${webpackTarget.config}`,
-      '--stats', 'errors-only',
-      '--output-path', tmpDir,
-      '--output-filename', `${webpackTarget.name}.measure.js`,
-      '--env', 'PRINT_WEBPACK_GRAPH'
+      '--display', 'errors-only',
+      `--output-path=${tmpDir}`,
+      `--output-filename=${webpackTarget.name}.measure.js`,
+      '--env.PRINT_WEBPACK_GRAPH'
     ], {
       cwd: path.resolve(__dirname, '..')
     });

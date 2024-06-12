@@ -5,8 +5,6 @@
 #ifndef ELECTRON_SHELL_COMMON_GIN_HELPER_ARGUMENTS_H_
 #define ELECTRON_SHELL_COMMON_GIN_HELPER_ARGUMENTS_H_
 
-#include <string_view>
-
 #include "gin/arguments.h"
 
 namespace gin_helper {
@@ -42,7 +40,7 @@ class Arguments : public gin::Arguments {
 
   // Throw error with custom error message.
   void ThrowError() const;
-  void ThrowError(std::string_view message) const;
+  void ThrowError(base::StringPiece message) const;
 
  private:
   // MUST NOT ADD ANY DATA MEMBER.

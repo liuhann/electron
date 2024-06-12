@@ -1,7 +1,8 @@
 const temp = require('temp');
-const fs = require('node:fs');
-const path = require('node:path');
-const childProcess = require('node:child_process');
+const fs = require('fs');
+const path = require('path');
+const childProcess = require('child_process');
+const got = require('got');
 const semver = require('semver');
 
 const { getCurrentBranch, ELECTRON_DIR } = require('../lib/utils');
@@ -45,12 +46,6 @@ let npmTag = '';
 
 const currentElectronVersion = getElectronVersion();
 const isNightlyElectronVersion = currentElectronVersion.includes('nightly');
-const targetRepo = getRepo();
-
-function getRepo () {
-  if (process.env.IS_GHA_RELEASE) return 'test-releases';
-  return isNightlyElectronVersion ? 'nightlies' : 'electron';
-}
 
 new Promise((resolve, reject) => {
   temp.mkdir('electron-npm', (err, dirPath) => {
@@ -64,18 +59,18 @@ new Promise((resolve, reject) => {
   .then((dirPath) => {
     tempDir = dirPath;
     // copy files from `/npm` to temp directory
-    for (const name of files) {
+    files.forEach((name) => {
       const noThirdSegment = name === 'README.md' || name === 'LICENSE';
       fs.writeFileSync(
         path.join(tempDir, name),
         fs.readFileSync(path.join(ELECTRON_DIR, noThirdSegment ? '' : 'npm', name))
       );
-    }
+    });
     // copy from root package.json to temp/package.json
     const packageJson = require(path.join(tempDir, 'package.json'));
-    for (const fieldName of jsonFields) {
+    jsonFields.forEach((fieldName) => {
       packageJson[fieldName] = rootPackageJson[fieldName];
-    }
+    });
     packageJson.version = currentElectronVersion;
     fs.writeFileSync(
       path.join(tempDir, 'package.json'),
@@ -84,7 +79,7 @@ new Promise((resolve, reject) => {
 
     return octokit.repos.listReleases({
       owner: 'electron',
-      repo: targetRepo
+      repo: isNightlyElectronVersion ? 'nightlies' : 'electron'
     });
   })
   .then((releases) => {
@@ -104,7 +99,7 @@ new Promise((resolve, reject) => {
     }
 
     const typingsContent = await getAssetContents(
-      targetRepo,
+      isNightlyElectronVersion ? 'nightlies' : 'electron',
       tsdAsset.id
     );
 
@@ -119,7 +114,7 @@ new Promise((resolve, reject) => {
     }
 
     const checksumsContent = await getAssetContents(
-      targetRepo,
+      isNightlyElectronVersion ? 'nightlies' : 'electron',
       checksumsAsset.id
     );
 
@@ -137,8 +132,13 @@ new Promise((resolve, reject) => {
     const currentBranch = await getCurrentBranch();
 
     if (isNightlyElectronVersion) {
-      // Nightlies get published to their own module, so they should be tagged as latest
-      npmTag = currentBranch === 'main' ? 'latest' : `nightly-${currentBranch}`;
+      // TODO(main-migration): Simplify once main branch is renamed.
+      if (currentBranch === 'master' || currentBranch === 'main') {
+        // Nightlies get published to their own module, so they should be tagged as latest
+        npmTag = 'latest';
+      } else {
+        npmTag = `nightly-${currentBranch}`;
+      }
 
       const currentJson = JSON.parse(fs.readFileSync(path.join(tempDir, 'package.json'), 'utf8'));
       currentJson.name = 'electron-nightly';
@@ -149,7 +149,7 @@ new Promise((resolve, reject) => {
         JSON.stringify(currentJson, null, 2)
       );
     } else {
-      if (currentBranch === 'main') {
+      if (currentBranch === 'master' || currentBranch === 'main') {
         // This should never happen, main releases should be nightly releases
         // this is here just-in-case
         throw new Error('Unreachable release phase, can\'t tag a non-nightly release on the main branch');
@@ -171,7 +171,7 @@ new Promise((resolve, reject) => {
     const tarballPath = path.join(tempDir, `${rootPackageJson.name}-${currentElectronVersion}.tgz`);
     return new Promise((resolve, reject) => {
       const result = childProcess.spawnSync('npm', ['install', tarballPath, '--force', '--silent'], {
-        env: { ...process.env, electron_config_cache: tempDir },
+        env: Object.assign({}, process.env, { electron_config_cache: tempDir }),
         cwd: tempDir,
         stdio: 'inherit'
       });

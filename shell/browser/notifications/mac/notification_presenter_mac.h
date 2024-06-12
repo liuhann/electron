@@ -6,6 +6,7 @@
 #ifndef ELECTRON_SHELL_BROWSER_NOTIFICATIONS_MAC_NOTIFICATION_PRESENTER_MAC_H_
 #define ELECTRON_SHELL_BROWSER_NOTIFICATIONS_MAC_NOTIFICATION_PRESENTER_MAC_H_
 
+#include "base/mac/scoped_nsobject.h"
 #include "shell/browser/notifications/mac/notification_center_delegate.h"
 #include "shell/browser/notifications/notification_presenter.h"
 
@@ -24,7 +25,8 @@ class NotificationPresenterMac : public NotificationPresenter {
   Notification* CreateNotificationObject(
       NotificationDelegate* delegate) override;
 
-  NotificationCenterDelegate* __strong notification_center_delegate_;
+  base::scoped_nsobject<NotificationCenterDelegate>
+      notification_center_delegate_;
 };
 
 }  // namespace electron

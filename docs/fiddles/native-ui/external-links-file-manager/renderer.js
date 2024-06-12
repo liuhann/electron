@@ -1,10 +1,13 @@
+const { shell } = require('electron')
+const os = require('os')
+
 const exLinksBtn = document.getElementById('open-ex-links')
 const fileManagerBtn = document.getElementById('open-file-manager')
 
 fileManagerBtn.addEventListener('click', (event) => {
-  window.electronAPI.openHomeDir()
+  shell.showItemInFolder(os.homedir())
 })
 
 exLinksBtn.addEventListener('click', (event) => {
-  window.electronAPI.openExternal('https://electronjs.org')
+  shell.openExternal('https://electronjs.org')
 })

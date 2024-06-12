@@ -19,7 +19,8 @@ CleanedUpAtExit::CleanedUpAtExit() {
   GetDoomed().emplace_back(this);
 }
 CleanedUpAtExit::~CleanedUpAtExit() {
-  std::erase(GetDoomed(), this);
+  auto& doomed = GetDoomed();
+  doomed.erase(std::remove(doomed.begin(), doomed.end(), this), doomed.end());
 }
 
 // static

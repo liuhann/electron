@@ -4,11 +4,9 @@
 // Use of this source code is governed by the MIT license that can be
 // found in the LICENSE file.
 
-#import <Cocoa/Cocoa.h>
-
-#include "content/public/common/color_parser.h"
+#include "base/mac/scoped_nsobject.h"
+#include "shell/browser/ui/cocoa/NSColor+Hex.h"
 #include "shell/browser/ui/cocoa/NSString+ANSI.h"
-#include "skia/ext/skia_utils_mac.h"
 
 @implementation NSMutableDictionary (ANSI)
 
@@ -20,7 +18,6 @@
 
   for (NSString* codeString in codeArray) {
     int code = codeString.intValue;
-    SkColor color;
     switch (code) {
       case 0:
         [self removeAllObjects];
@@ -40,44 +37,36 @@
         // case 24: underlined off
 
       case 30:
-        content::ParseHexColorString(bold ? "#7f7f7f" : "#000000", &color);
         self[NSForegroundColorAttributeName] =
-            skia::SkColorToCalibratedNSColor(color);
+            [NSColor colorWithHexColorString:bold ? @"7f7f7f" : @"000000"];
         break;
       case 31:
-        content::ParseHexColorString(bold ? "#cd0000" : "#ff0000", &color);
         self[NSForegroundColorAttributeName] =
-            skia::SkColorToCalibratedNSColor(color);
+            [NSColor colorWithHexColorString:bold ? @"cd0000" : @"ff0000"];
         break;
       case 32:
-        content::ParseHexColorString(bold ? "#00cd00" : "#00ff00", &color);
         self[NSForegroundColorAttributeName] =
-            skia::SkColorToCalibratedNSColor(color);
+            [NSColor colorWithHexColorString:bold ? @"00cd00" : @"00ff00"];
         break;
       case 33:
-        content::ParseHexColorString(bold ? "#cdcd00" : "#ffff00", &color);
         self[NSForegroundColorAttributeName] =
-            skia::SkColorToCalibratedNSColor(color);
+            [NSColor colorWithHexColorString:bold ? @"cdcd00" : @"ffff00"];
         break;
       case 34:
-        content::ParseHexColorString(bold ? "#0000ee" : "#5c5cff", &color);
         self[NSForegroundColorAttributeName] =
-            skia::SkColorToCalibratedNSColor(color);
+            [NSColor colorWithHexColorString:bold ? @"0000ee" : @"5c5cff"];
         break;
       case 35:
-        content::ParseHexColorString(bold ? "#cd00cd" : "#ff00ff", &color);
         self[NSForegroundColorAttributeName] =
-            skia::SkColorToCalibratedNSColor(color);
+            [NSColor colorWithHexColorString:bold ? @"cd00cd" : @"ff00ff"];
         break;
       case 36:
-        content::ParseHexColorString(bold ? "#00cdcd" : "#00ffff", &color);
         self[NSForegroundColorAttributeName] =
-            skia::SkColorToCalibratedNSColor(color);
+            [NSColor colorWithHexColorString:bold ? @"00cdcd" : @"00ffff"];
         break;
       case 37:
-        content::ParseHexColorString(bold ? "#e5e5e5" : "#ffffff", &color);
         self[NSForegroundColorAttributeName] =
-            skia::SkColorToCalibratedNSColor(color);
+            [NSColor colorWithHexColorString:bold ? @"e5e5e5" : @"ffffff"];
         break;
 
       case 39:
@@ -85,44 +74,36 @@
         break;
 
       case 40:
-        content::ParseHexColorString("#7f7f7f", &color);
         self[NSBackgroundColorAttributeName] =
-            skia::SkColorToCalibratedNSColor(color);
+            [NSColor colorWithHexColorString:@"7f7f7f"];
         break;
       case 41:
-        content::ParseHexColorString("#cd0000", &color);
         self[NSBackgroundColorAttributeName] =
-            skia::SkColorToCalibratedNSColor(color);
+            [NSColor colorWithHexColorString:@"cd0000"];
         break;
       case 42:
-        content::ParseHexColorString("#00cd00", &color);
         self[NSBackgroundColorAttributeName] =
-            skia::SkColorToCalibratedNSColor(color);
+            [NSColor colorWithHexColorString:@"00cd00"];
         break;
       case 43:
-        content::ParseHexColorString("#cdcd00", &color);
         self[NSBackgroundColorAttributeName] =
-            skia::SkColorToCalibratedNSColor(color);
+            [NSColor colorWithHexColorString:@"cdcd00"];
         break;
       case 44:
-        content::ParseHexColorString("#0000ee", &color);
         self[NSBackgroundColorAttributeName] =
-            skia::SkColorToCalibratedNSColor(color);
+            [NSColor colorWithHexColorString:@"0000ee"];
         break;
       case 45:
-        content::ParseHexColorString("cd00cd", &color);
         self[NSBackgroundColorAttributeName] =
-            skia::SkColorToCalibratedNSColor(color);
+            [NSColor colorWithHexColorString:@"cd00cd"];
         break;
       case 46:
-        content::ParseHexColorString("#00cdcd", &color);
         self[NSBackgroundColorAttributeName] =
-            skia::SkColorToCalibratedNSColor(color);
+            [NSColor colorWithHexColorString:@"00cdcd"];
         break;
       case 47:
-        content::ParseHexColorString("#e5e5e5", &color);
         self[NSBackgroundColorAttributeName] =
-            skia::SkColorToCalibratedNSColor(color);
+            [NSColor colorWithHexColorString:@"e5e5e5"];
         break;
 
       case 49:
@@ -148,11 +129,12 @@
 - (NSMutableAttributedString*)attributedStringParsingANSICodes {
   NSMutableAttributedString* result = [[NSMutableAttributedString alloc] init];
 
-  NSMutableDictionary* attributes([[NSMutableDictionary alloc] init]);
+  base::scoped_nsobject<NSMutableDictionary> attributes(
+      [[NSMutableDictionary alloc] init]);
   NSArray* parts = [self componentsSeparatedByString:@"\033["];
-  [result appendAttributedString:[[NSAttributedString alloc]
+  [result appendAttributedString:[[[NSAttributedString alloc]
                                      initWithString:parts.firstObject
-                                         attributes:nil]];
+                                         attributes:nil] autorelease]];
 
   for (NSString* part in
        [parts subarrayWithRange:NSMakeRange(1, parts.count - 1)]) {
@@ -163,16 +145,18 @@
     NSString* text = sequence.lastObject;
 
     if (sequence.count < 2) {
-      [result appendAttributedString:[[NSAttributedString alloc]
-                                         initWithString:text
-                                             attributes:attributes]];
+      [result
+          appendAttributedString:[[[NSAttributedString alloc]
+                                     initWithString:text
+                                         attributes:attributes] autorelease]];
     } else if (sequence.count >= 2) {
       text = [[sequence subarrayWithRange:NSMakeRange(1, sequence.count - 1)]
           componentsJoinedByString:@"m"];
       [attributes modifyAttributesForANSICodes:sequence[0]];
-      [result appendAttributedString:[[NSAttributedString alloc]
-                                         initWithString:text
-                                             attributes:attributes]];
+      [result
+          appendAttributedString:[[[NSAttributedString alloc]
+                                     initWithString:text
+                                         attributes:attributes] autorelease]];
     }
   }
 

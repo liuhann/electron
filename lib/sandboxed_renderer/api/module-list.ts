@@ -19,8 +19,10 @@ export const moduleList: ElectronInternal.ModuleEntry[] = [
     name: 'webFrame',
     loader: () => require('@electron/internal/renderer/api/web-frame')
   },
+  // The internal modules, invisible unless you know their names.
   {
-    name: 'webUtils',
-    loader: () => require('@electron/internal/renderer/api/web-utils')
+    name: 'deprecate',
+    loader: () => require('@electron/internal/common/api/deprecate'),
+    private: true
   }
 ];

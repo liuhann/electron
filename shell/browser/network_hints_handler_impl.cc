@@ -25,7 +25,7 @@ NetworkHintsHandlerImpl::NetworkHintsHandlerImpl(
 
 NetworkHintsHandlerImpl::~NetworkHintsHandlerImpl() = default;
 
-void NetworkHintsHandlerImpl::Preconnect(const url::SchemeHostPort& url,
+void NetworkHintsHandlerImpl::Preconnect(const GURL& url,
                                          bool allow_credentials) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
@@ -34,7 +34,7 @@ void NetworkHintsHandlerImpl::Preconnect(const url::SchemeHostPort& url,
   }
   auto* session = electron::api::Session::FromBrowserContext(browser_context_);
   if (session) {
-    session->Emit("preconnect", url.GetURL(), allow_credentials);
+    session->Emit("preconnect", url, allow_credentials);
   }
 }
 

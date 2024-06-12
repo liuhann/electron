@@ -6,7 +6,7 @@
   </head>
   <body>
     <div>
-      <h1>
+      <h1>  
         Open external links and the file manager
       </h1>
       <h3>
@@ -17,7 +17,7 @@
       <p>This module works in both the main and renderer process.</p>
       <p>
         Open the
-        <a href="https://www.electronjs.org/docs/latest/api/shell">
+        <a href="https://electronjs.org/docs/api/shell">
           full API documentation (opens in new window)
         </a>
         in your browser.
@@ -80,7 +80,7 @@ const shell = require('electron').shell
 
 const links = document.querySelectorAll('a[href]')
 
-for (const link of links) {
+Array.prototype.forEach.call(links, (link) => {
   const url = link.getAttribute('href')
   if (url.indexOf('http') === 0) {
     link.addEventListener('click', (e) => {
@@ -88,13 +88,17 @@ for (const link of links) {
       shell.openExternal(url)
     })
   }
-}
+})
                 </code>
               </pre>
           </div>
         </div>
       </div>
     </div>
-    <script src="renderer.js"></script>
+
+    <script>
+      // You can also require other files to run in this process
+      require("./renderer.js");
+    </script>
   </body>
 </html>

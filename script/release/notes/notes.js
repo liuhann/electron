@@ -2,8 +2,8 @@
 
 'use strict';
 
-const fs = require('node:fs');
-const path = require('node:path');
+const fs = require('fs');
+const path = require('path');
 
 const { GitProcess } = require('dugite');
 
@@ -99,7 +99,7 @@ const getNoteFromClerk = async (ghKey) => {
 
   const CLERK_LOGIN = 'release-clerk[bot]';
   const CLERK_NO_NOTES = '**No Release Notes**';
-  const PERSIST_LEAD = '**Release Notes Persisted**';
+  const PERSIST_LEAD = '**Release Notes Persisted**\n\n';
   const QUOTE_LEAD = '> ';
 
   for (const comment of comments.data.reverse()) {
@@ -130,8 +130,6 @@ const getNoteFromClerk = async (ghKey) => {
         .trim();
     }
   }
-
-  console.warn(`WARN: no notes found in ${buildPullURL(ghKey)}`);
 };
 
 /**
@@ -258,7 +256,7 @@ async function runRetryable (fn, maxRetries) {
     try {
       return await fn();
     } catch (error) {
-      await new Promise(resolve => setTimeout(resolve, CHECK_INTERVAL));
+      await new Promise((resolve, reject) => setTimeout(resolve, CHECK_INTERVAL));
       lastError = error;
     }
   }
@@ -412,7 +410,7 @@ const getNotes = async (fromRef, toRef, newVersion) => {
   // remove any old commits
   pool.commits = pool.commits.filter(commit => !pool.processedHashes.has(commit.hash));
 
-  // if a commit _and_ revert occurred in the unprocessed set, skip them both
+  // if a commmit _and_ revert occurred in the unprocessed set, skip them both
   for (const commit of pool.commits) {
     const revertHash = commit.revertHash;
     if (!revertHash) {
@@ -463,7 +461,7 @@ const getNotes = async (fromRef, toRef, newVersion) => {
     toBranch
   };
 
-  for (const commit of pool.commits) {
+  pool.commits.forEach(commit => {
     const str = commit.semanticType;
     if (commit.isBreakingChange) {
       notes.breaking.push(commit);
@@ -480,27 +478,9 @@ const getNotes = async (fromRef, toRef, newVersion) => {
     } else {
       notes.unknown.push(commit);
     }
-  }
+  });
 
   return notes;
-};
-
-const compareVersions = (v1, v2) => {
-  const [split1, split2] = [v1.split('.'), v2.split('.')];
-
-  if (split1.length !== split2.length) {
-    throw new Error(`Expected version strings to have same number of sections: ${split1} and ${split2}`);
-  }
-  for (let i = 0; i < split1.length; i++) {
-    const p1 = parseInt(split1[i], 10);
-    const p2 = parseInt(split2[i], 10);
-
-    if (p1 > p2) return 1;
-    else if (p1 < p2) return -1;
-    // Continue checking the value if this portion is equal
-  }
-
-  return 0;
 };
 
 const removeSupercededStackUpdates = (commits) => {
@@ -514,9 +494,8 @@ const removeSupercededStackUpdates = (commits) => {
       notupdates.push(commit);
       continue;
     }
-
     const [, dep, version] = match;
-    if (!newest[dep] || compareVersions(version, newest[dep].version) > 0) {
+    if (!newest[dep] || newest[dep].version < version) {
       newest[dep] = { commit, version };
     }
   }
@@ -617,14 +596,10 @@ function renderDescription (commit) {
 const renderNote = (commit, excludeBranch) =>
   `* ${renderDescription(commit)} ${renderLink(commit)} ${renderTrops(commit, excludeBranch)}\n`;
 
-const renderNotes = (notes, unique = false) => {
+const renderNotes = (notes) => {
   const rendered = [`# Release Notes for ${notes.name}\n\n`];
 
-  const renderSection = (title, commits, unique) => {
-    if (unique) {
-      // omit changes that also landed in other branches
-      commits = commits.filter((commit) => renderTrops(commit, notes.toBranch).length === 0);
-    }
+  const renderSection = (title, commits) => {
     if (commits.length > 0) {
       rendered.push(
         `## ${title}\n\n`,
@@ -633,17 +608,17 @@ const renderNotes = (notes, unique = false) => {
     }
   };
 
-  renderSection('Breaking Changes', notes.breaking, unique);
-  renderSection('Features', notes.feat, unique);
-  renderSection('Fixes', notes.fix, unique);
-  renderSection('Other Changes', notes.other, unique);
+  renderSection('Breaking Changes', notes.breaking);
+  renderSection('Features', notes.feat);
+  renderSection('Fixes', notes.fix);
+  renderSection('Other Changes', notes.other);
 
   if (notes.docs.length) {
     const docs = notes.docs.map(commit => renderLink(commit)).sort();
     rendered.push('## Documentation\n\n', ` * Documentation changes: ${docs.join(', ')}\n`, '\n');
   }
 
-  renderSection('Unknown', notes.unknown, unique);
+  renderSection('Unknown', notes.unknown);
 
   return rendered.join('');
 };

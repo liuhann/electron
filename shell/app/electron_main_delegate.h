@@ -34,11 +34,10 @@ class ElectronMainDelegate : public content::ContentMainDelegate {
 
  protected:
   // content::ContentMainDelegate:
-  std::optional<int> BasicStartupComplete() override;
+  bool BasicStartupComplete(int* exit_code) override;
   void PreSandboxStartup() override;
   void SandboxInitialized(const std::string& process_type) override;
-  std::optional<int> PreBrowserMain() override;
-  content::ContentClient* CreateContentClient() override;
+  void PreBrowserMain() override;
   content::ContentBrowserClient* CreateContentBrowserClient() override;
   content::ContentGpuClient* CreateContentGpuClient() override;
   content::ContentRendererClient* CreateContentRendererClient() override;
@@ -47,7 +46,6 @@ class ElectronMainDelegate : public content::ContentMainDelegate {
       const std::string& process_type,
       content::MainFunctionParams main_function_params) override;
   bool ShouldCreateFeatureList(InvokedIn invoked_in) override;
-  bool ShouldInitializeMojo(InvokedIn invoked_in) override;
   bool ShouldLockSchemeRegistry() override;
 #if BUILDFLAG(IS_LINUX)
   void ZygoteForked() override;

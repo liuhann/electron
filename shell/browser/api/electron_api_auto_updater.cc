@@ -16,7 +16,9 @@
 #include "shell/common/gin_helper/object_template_builder.h"
 #include "shell/common/node_includes.h"
 
-namespace electron::api {
+namespace electron {
+
+namespace api {
 
 gin::WrapperInfo AutoUpdater::kWrapperInfo = {gin::kEmbedderNativeGin};
 
@@ -32,26 +34,13 @@ void AutoUpdater::OnError(const std::string& message) {
   v8::Isolate* isolate = JavascriptEnvironment::GetIsolate();
   v8::HandleScope handle_scope(isolate);
   v8::Local<v8::Object> wrapper;
-
-  // We do not use gin::EmitEvent here because we do not want to
-  // put this in its own CallbackScope and delegate to Node.js'
-  // specialized handling for Error objects.
   if (GetWrapper(isolate).ToLocal(&wrapper)) {
     auto error = v8::Exception::Error(gin::StringToV8(isolate, message));
-    std::vector<v8::Local<v8::Value>> args = {
-        gin::StringToV8(isolate, "error"),
-        gin::ConvertToV8(
-            isolate,
-            error->ToObject(isolate->GetCurrentContext()).ToLocalChecked()),
-        gin::StringToV8(isolate, message),
-    };
-
-    gin_helper::MicrotasksScope microtasks_scope(
-        isolate, wrapper->GetCreationContextChecked()->GetMicrotaskQueue(),
-        true);
-
-    node::MakeCallback(isolate, wrapper, "emit", args.size(), args.data(),
-                       {0, 0});
+    gin_helper::EmitEvent(
+        isolate, wrapper, "error",
+        error->ToObject(isolate->GetCurrentContext()).ToLocalChecked(),
+        // Message is also emitted to keep compatibility with old code.
+        message);
   }
 }
 
@@ -108,6 +97,10 @@ void AutoUpdater::OnWindowAllClosed() {
   QuitAndInstall();
 }
 
+void AutoUpdater::SetFeedURL(gin::Arguments* args) {
+  auto_updater::AutoUpdater::SetFeedURL(args);
+}
+
 void AutoUpdater::QuitAndInstall() {
   Emit("before-quit-for-update");
 
@@ -133,11 +126,7 @@ gin::ObjectTemplateBuilder AutoUpdater::GetObjectTemplateBuilder(
              isolate)
       .SetMethod("checkForUpdates", &auto_updater::AutoUpdater::CheckForUpdates)
       .SetMethod("getFeedURL", &auto_updater::AutoUpdater::GetFeedURL)
-      .SetMethod("setFeedURL", &auto_updater::AutoUpdater::SetFeedURL)
-#if DCHECK_IS_ON()
-      .SetMethod("isVersionAllowedForUpdate",
-                 &auto_updater::AutoUpdater::IsVersionAllowedForUpdate)
-#endif
+      .SetMethod("setFeedURL", &AutoUpdater::SetFeedURL)
       .SetMethod("quitAndInstall", &AutoUpdater::QuitAndInstall);
 }
 
@@ -145,7 +134,9 @@ const char* AutoUpdater::GetTypeName() {
   return "AutoUpdater";
 }
 
-}  // namespace electron::api
+}  // namespace api
+
+}  // namespace electron
 
 namespace {
 
@@ -162,4 +153,4 @@ void Initialize(v8::Local<v8::Object> exports,
 
 }  // namespace
 
-NODE_LINKED_BINDING_CONTEXT_AWARE(electron_browser_auto_updater, Initialize)
+NODE_LINKED_MODULE_CONTEXT_AWARE(electron_browser_auto_updater, Initialize)

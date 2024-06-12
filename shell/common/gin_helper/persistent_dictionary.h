@@ -5,7 +5,6 @@
 #ifndef ELECTRON_SHELL_COMMON_GIN_HELPER_PERSISTENT_DICTIONARY_H_
 #define ELECTRON_SHELL_COMMON_GIN_HELPER_PERSISTENT_DICTIONARY_H_
 
-#include "base/memory/raw_ptr.h"
 #include "shell/common/gin_helper/dictionary.h"
 
 namespace gin_helper {
@@ -39,7 +38,7 @@ class PersistentDictionary {
   }
 
  private:
-  raw_ptr<v8::Isolate> isolate_ = nullptr;
+  v8::Isolate* isolate_ = nullptr;
   v8::Global<v8::Object> handle_;
 };
 

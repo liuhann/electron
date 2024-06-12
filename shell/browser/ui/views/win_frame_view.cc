@@ -15,7 +15,6 @@
 #include "base/win/windows_version.h"
 #include "shell/browser/native_window_views.h"
 #include "shell/browser/ui/views/win_caption_button_container.h"
-#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/win/hwnd_metrics.h"
 #include "ui/display/win/dpi.h"
 #include "ui/display/win/screen_win.h"
@@ -25,6 +24,8 @@
 #include "ui/views/win/hwnd_util.h"
 
 namespace electron {
+
+const char WinFrameView::kViewClassName[] = "WinFrameView";
 
 WinFrameView::WinFrameView() = default;
 
@@ -58,7 +59,8 @@ void WinFrameView::InvalidateCaptionButtons() {
   if (!caption_button_container_)
     return;
 
-  caption_button_container_->UpdateBackground();
+  caption_button_container_->SetBackground(
+      views::CreateSolidBackground(window()->overlay_button_color()));
   caption_button_container_->InvalidateLayout();
   caption_button_container_->SchedulePaint();
 }
@@ -117,35 +119,37 @@ int WinFrameView::NonClientHitTest(const gfx::Point& point) {
     // corner of the window. This code ensures the mouse isn't set to a size
     // cursor while hovering over the caption buttons, thus giving the incorrect
     // impression that the user can resize the window.
-    RECT button_bounds = {0};
-    if (SUCCEEDED(DwmGetWindowAttribute(
-            views::HWNDForWidget(frame()), DWMWA_CAPTION_BUTTON_BOUNDS,
-            &button_bounds, sizeof(button_bounds)))) {
-      gfx::RectF button_bounds_in_dips = gfx::ConvertRectToDips(
-          gfx::Rect(button_bounds), display::win::GetDPIScale());
-      // TODO(crbug.com/1131681): GetMirroredRect() requires an integer rect,
-      // but the size in DIPs may not be an integer with a fractional device
-      // scale factor. If we want to keep using integers, the choice to use
-      // ToFlooredRectDeprecated() seems to be doing the wrong thing given the
-      // comment below about insetting 1 DIP instead of 1 physical pixel. We
-      // should probably use ToEnclosedRect() and then we could have inset 1
-      // physical pixel here.
-      gfx::Rect buttons =
-          GetMirroredRect(gfx::ToFlooredRectDeprecated(button_bounds_in_dips));
+    if (base::win::GetVersion() >= base::win::Version::WIN8) {
+      RECT button_bounds = {0};
+      if (SUCCEEDED(DwmGetWindowAttribute(
+              views::HWNDForWidget(frame()), DWMWA_CAPTION_BUTTON_BOUNDS,
+              &button_bounds, sizeof(button_bounds)))) {
+        gfx::RectF button_bounds_in_dips = gfx::ConvertRectToDips(
+            gfx::Rect(button_bounds), display::win::GetDPIScale());
+        // TODO(crbug.com/1131681): GetMirroredRect() requires an integer rect,
+        // but the size in DIPs may not be an integer with a fractional device
+        // scale factor. If we want to keep using integers, the choice to use
+        // ToFlooredRectDeprecated() seems to be doing the wrong thing given the
+        // comment below about insetting 1 DIP instead of 1 physical pixel. We
+        // should probably use ToEnclosedRect() and then we could have inset 1
+        // physical pixel here.
+        gfx::Rect buttons = GetMirroredRect(
+            gfx::ToFlooredRectDeprecated(button_bounds_in_dips));
 
-      // There is a small one-pixel strip right above the caption buttons in
-      // which the resize border "peeks" through.
-      constexpr int kCaptionButtonTopInset = 1;
-      // The sizing region at the window edge above the caption buttons is
-      // 1 px regardless of scale factor. If we inset by 1 before converting
-      // to DIPs, the precision loss might eliminate this region entirely. The
-      // best we can do is to inset after conversion. This guarantees we'll
-      // show the resize cursor when resizing is possible. The cost of which
-      // is also maybe showing it over the portion of the DIP that isn't the
-      // outermost pixel.
-      buttons.Inset(gfx::Insets::TLBR(0, kCaptionButtonTopInset, 0, 0));
-      if (buttons.Contains(point))
-        return HTNOWHERE;
+        // There is a small one-pixel strip right above the caption buttons in
+        // which the resize border "peeks" through.
+        constexpr int kCaptionButtonTopInset = 1;
+        // The sizing region at the window edge above the caption buttons is
+        // 1 px regardless of scale factor. If we inset by 1 before converting
+        // to DIPs, the precision loss might eliminate this region entirely. The
+        // best we can do is to inset after conversion. This guarantees we'll
+        // show the resize cursor when resizing is possible. The cost of which
+        // is also maybe showing it over the portion of the DIP that isn't the
+        // outermost pixel.
+        buttons.Inset(gfx::Insets::TLBR(0, kCaptionButtonTopInset, 0, 0));
+        if (buttons.Contains(point))
+          return HTNOWHERE;
+      }
     }
 
     int top_border_thickness = FrameTopBorderThickness(false);
@@ -164,6 +168,10 @@ int WinFrameView::NonClientHitTest(const gfx::Point& point) {
   return FramelessView::NonClientHitTest(point);
 }
 
+const char* WinFrameView::GetClassName() const {
+  return kViewClassName;
+}
+
 bool WinFrameView::IsMaximized() const {
   return frame()->IsMaximized();
 }
@@ -172,12 +180,12 @@ bool WinFrameView::ShouldCustomDrawSystemTitlebar() const {
   return window()->IsWindowControlsOverlayEnabled();
 }
 
-void WinFrameView::Layout(PassKey) {
+void WinFrameView::Layout() {
   LayoutCaptionButtons();
   if (window()->IsWindowControlsOverlayEnabled()) {
     LayoutWindowControlsOverlay();
   }
-  LayoutSuperclass<NonClientFrameView>(this);
+  NonClientFrameView::Layout();
 }
 
 int WinFrameView::FrameTopBorderThickness(bool restored) const {
@@ -288,8 +296,5 @@ void WinFrameView::LayoutWindowControlsOverlay() {
   window()->SetWindowControlsOverlayRect(bounding_rect);
   window()->NotifyLayoutWindowControlsOverlay();
 }
-
-BEGIN_METADATA(WinFrameView)
-END_METADATA
 
 }  // namespace electron

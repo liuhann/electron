@@ -5,13 +5,12 @@
 #import <Cocoa/Cocoa.h>
 
 int main(int argc, char* argv[]) {
-  @autoreleasepool {
-    NSArray* pathComponents =
-        [[[NSBundle mainBundle] bundlePath] pathComponents];
-    pathComponents = [pathComponents
-        subarrayWithRange:NSMakeRange(0, [pathComponents count] - 4)];
-    NSString* path = [NSString pathWithComponents:pathComponents];
-    [[NSWorkspace sharedWorkspace] launchApplication:path];
-    return 0;
-  }
+  NSAutoreleasePool* pool = [[NSAutoreleasePool alloc] init];
+  NSArray* pathComponents = [[[NSBundle mainBundle] bundlePath] pathComponents];
+  pathComponents = [pathComponents
+      subarrayWithRange:NSMakeRange(0, [pathComponents count] - 4)];
+  NSString* path = [NSString pathWithComponents:pathComponents];
+  [[NSWorkspace sharedWorkspace] launchApplication:path];
+  [pool drain];
+  return 0;
 }

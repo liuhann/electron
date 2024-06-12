@@ -10,11 +10,12 @@
 #include <utility>
 #include <vector>
 
+#include "base/bind.h"
 #include "base/command_line.h"
-#include "base/functional/bind.h"
 #include "base/no_destructor.h"
 #include "base/path_service.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/threading/thread_restrictions.h"
 #include "base/trace_event/trace_event.h"
 #include "chrome/common/chrome_paths.h"
 #include "components/upload_list/crash_upload_list.h"
@@ -28,10 +29,8 @@
 #include "shell/common/gin_converters/time_converter.h"
 #include "shell/common/gin_helper/dictionary.h"
 #include "shell/common/node_includes.h"
-#include "shell/common/process_util.h"
-#include "shell/common/thread_restrictions.h"
 
-#if !IS_MAS_BUILD()
+#if !defined(MAS_BUILD)
 #include "components/crash/core/app/crashpad.h"  // nogncheck
 #include "components/crash/core/browser/crash_upload_list_crashpad.h"  // nogncheck
 #include "components/crash/core/common/crash_key.h"
@@ -43,7 +42,8 @@
 #if BUILDFLAG(IS_LINUX)
 #include "base/containers/span.h"
 #include "base/files/file_util.h"
-#include "base/uuid.h"
+#include "base/guid.h"
+#include "components/crash/core/app/breakpad_linux.h"
 #include "components/crash/core/common/crash_keys.h"
 #include "components/upload_list/combining_upload_list.h"
 #include "v8/include/v8-wasm-trap-handler-posix.h"
@@ -64,9 +64,13 @@ bool g_crash_reporter_initialized = false;
 
 }  // namespace
 
-namespace electron::api::crash_reporter {
+namespace electron {
 
-#if IS_MAS_BUILD()
+namespace api {
+
+namespace crash_reporter {
+
+#if defined(MAS_BUILD)
 namespace {
 
 void NoOp() {}
@@ -92,7 +96,7 @@ bool GetClientIdPath(base::FilePath* path) {
 }
 
 std::string ReadClientId() {
-  electron::ScopedAllowBlockingForElectron allow_blocking;
+  base::ThreadRestrictions::ScopedAllowIO allow_io;
   std::string client_id;
   // "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".length == 36
   base::FilePath client_id_path;
@@ -105,7 +109,7 @@ std::string ReadClientId() {
 
 void WriteClientId(const std::string& client_id) {
   DCHECK_EQ(client_id.size(), 36u);
-  electron::ScopedAllowBlockingForElectron allow_blocking;
+  base::ThreadRestrictions::ScopedAllowIO allow_io;
   base::FilePath client_id_path;
   if (GetClientIdPath(&client_id_path))
     base::WriteFile(client_id_path, client_id);
@@ -117,7 +121,7 @@ std::string GetClientId() {
     return *client_id;
   *client_id = ReadClientId();
   if (client_id->empty()) {
-    *client_id = base::Uuid::GenerateRandomV4().AsLowercaseString();
+    *client_id = base::GenerateGUID();
     WriteClientId(*client_id);
   }
   return *client_id;
@@ -133,7 +137,7 @@ void Start(const std::string& submit_url,
            const std::map<std::string, std::string>& extra,
            bool is_node_process) {
   TRACE_EVENT0("electron", "crash_reporter::Start");
-#if !IS_MAS_BUILD()
+#if !defined(MAS_BUILD)
   if (g_crash_reporter_initialized)
     return;
   g_crash_reporter_initialized = true;
@@ -143,22 +147,39 @@ void Start(const std::string& submit_url,
   ElectronCrashReporterClient::Get()->SetShouldRateLimit(rate_limit);
   ElectronCrashReporterClient::Get()->SetShouldCompressUploads(compress);
   ElectronCrashReporterClient::Get()->SetGlobalAnnotations(global_extra);
-  std::string process_type = is_node_process ? "node" : GetProcessType();
+  auto* command_line = base::CommandLine::ForCurrentProcess();
+  std::string process_type =
+      is_node_process
+          ? "node"
+          : command_line->GetSwitchValueASCII(::switches::kProcessType);
 #if BUILDFLAG(IS_LINUX)
-  for (const auto& pair : extra)
-    electron::crash_keys::SetCrashKey(pair.first, pair.second);
-  {
-    electron::ScopedAllowBlockingForElectron allow_blocking;
-    ::crash_reporter::InitializeCrashpad(IsBrowserProcess(), process_type);
-  }
-  if (ignore_system_crash_handler) {
-    crashpad::CrashpadInfo::GetCrashpadInfo()
-        ->set_system_crash_reporter_forwarding(crashpad::TriState::kDisabled);
+  if (::crash_reporter::IsCrashpadEnabled()) {
+    for (const auto& pair : extra)
+      electron::crash_keys::SetCrashKey(pair.first, pair.second);
+    {
+      base::ThreadRestrictions::ScopedAllowIO allow_io;
+      ::crash_reporter::InitializeCrashpad(process_type.empty(), process_type);
+    }
+    if (ignore_system_crash_handler) {
+      crashpad::CrashpadInfo::GetCrashpadInfo()
+          ->set_system_crash_reporter_forwarding(crashpad::TriState::kDisabled);
+    }
+  } else {
+    ::crash_keys::SetMetricsClientIdFromGUID(GetClientId());
+    auto& global_crash_keys = GetGlobalCrashKeysMutable();
+    for (const auto& pair : global_extra) {
+      global_crash_keys[pair.first] = pair.second;
+    }
+    for (const auto& pair : extra)
+      electron::crash_keys::SetCrashKey(pair.first, pair.second);
+    for (const auto& pair : global_extra)
+      electron::crash_keys::SetCrashKey(pair.first, pair.second);
+    breakpad::InitCrashReporter(process_type);
   }
 #elif BUILDFLAG(IS_MAC)
   for (const auto& pair : extra)
     electron::crash_keys::SetCrashKey(pair.first, pair.second);
-  ::crash_reporter::InitializeCrashpad(IsBrowserProcess(), process_type);
+  ::crash_reporter::InitializeCrashpad(process_type.empty(), process_type);
   if (ignore_system_crash_handler) {
     crashpad::CrashpadInfo::GetCrashpadInfo()
         ->set_system_crash_reporter_forwarding(crashpad::TriState::kDisabled);
@@ -169,17 +190,21 @@ void Start(const std::string& submit_url,
   base::FilePath user_data_dir;
   base::PathService::Get(chrome::DIR_USER_DATA, &user_data_dir);
   ::crash_reporter::InitializeCrashpadWithEmbeddedHandler(
-      IsBrowserProcess(), process_type, base::WideToUTF8(user_data_dir.value()),
-      base::FilePath());
+      process_type.empty(), process_type,
+      base::WideToUTF8(user_data_dir.value()), base::FilePath());
 #endif
 #endif
 }
 
-}  // namespace electron::api::crash_reporter
+}  // namespace crash_reporter
+
+}  // namespace api
+
+}  // namespace electron
 
 namespace {
 
-#if IS_MAS_BUILD()
+#if defined(MAS_BUILD)
 void GetUploadedReports(
     v8::Isolate* isolate,
     base::OnceCallback<void(v8::Local<v8::Value>)> callback) {
@@ -196,15 +221,17 @@ scoped_refptr<UploadList> CreateCrashUploadList() {
       crash_dir_path.AppendASCII(CrashUploadList::kReporterLogFilename);
   scoped_refptr<UploadList> result =
       base::MakeRefCounted<TextLogUploadList>(upload_log_path);
-  // Crashpad keeps the records of C++ crashes (segfaults, etc) in its
-  // internal database. The JavaScript error reporter writes JS error upload
-  // records to the older text format. Combine the two to present a complete
-  // list to the user.
-  // TODO(nornagon): what is "The JavaScript error reporter", and do we care
-  // about it?
-  std::vector<scoped_refptr<UploadList>> uploaders = {
-      base::MakeRefCounted<CrashUploadListCrashpad>(), std::move(result)};
-  result = base::MakeRefCounted<CombiningUploadList>(std::move(uploaders));
+  if (crash_reporter::IsCrashpadEnabled()) {
+    // Crashpad keeps the records of C++ crashes (segfaults, etc) in its
+    // internal database. The JavaScript error reporter writes JS error upload
+    // records to the older text format. Combine the two to present a complete
+    // list to the user.
+    // TODO(nornagon): what is "The JavaScript error reporter", and do we care
+    // about it?
+    std::vector<scoped_refptr<UploadList>> uploaders = {
+        base::MakeRefCounted<CrashUploadListCrashpad>(), std::move(result)};
+    result = base::MakeRefCounted<CombiningUploadList>(std::move(uploaders));
+  }
   return result;
 #endif  // BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)
 }
@@ -215,18 +242,17 @@ v8::Local<v8::Value> GetUploadedReports(v8::Isolate* isolate) {
   // synchronous version of getUploadedReports is deprecated so we can remove
   // our patch.
   {
-    electron::ScopedAllowBlockingForElectron allow_blocking;
+    base::ThreadRestrictions::ScopedAllowIO allow_io;
     list->LoadSync();
   }
-
+  std::vector<UploadList::UploadInfo> uploads;
   constexpr size_t kMaxUploadReportsToList = std::numeric_limits<size_t>::max();
-  const std::vector<const UploadList::UploadInfo*> uploads =
-      list->GetUploads(kMaxUploadReportsToList);
+  list->GetUploads(kMaxUploadReportsToList, &uploads);
   std::vector<v8::Local<v8::Object>> result;
-  for (auto* const upload : uploads) {
+  for (const auto& upload : uploads) {
     result.push_back(gin::DataObjectBuilder(isolate)
-                         .Set("date", upload->upload_time)
-                         .Set("id", upload->upload_id)
+                         .Set("date", upload.upload_time)
+                         .Set("id", upload.upload_id)
                          .Build());
   }
   v8::Local<v8::Value> v8_result = gin::ConvertToV8(isolate, result);
@@ -235,13 +261,13 @@ v8::Local<v8::Value> GetUploadedReports(v8::Isolate* isolate) {
 #endif
 
 void SetUploadToServer(bool upload) {
-#if !IS_MAS_BUILD()
+#if !defined(MAS_BUILD)
   ElectronCrashReporterClient::Get()->SetCollectStatsConsent(upload);
 #endif
 }
 
 bool GetUploadToServer() {
-#if IS_MAS_BUILD()
+#if defined(MAS_BUILD)
   return false;
 #else
   return ElectronCrashReporterClient::Get()->GetCollectStatsConsent();
@@ -250,7 +276,7 @@ bool GetUploadToServer() {
 
 v8::Local<v8::Value> GetParameters(v8::Isolate* isolate) {
   std::map<std::string, std::string> keys;
-#if !IS_MAS_BUILD()
+#if !defined(MAS_BUILD)
   electron::crash_keys::GetCrashKeys(&keys);
 #endif
   return gin::ConvertToV8(isolate, keys);
@@ -262,7 +288,7 @@ void Initialize(v8::Local<v8::Object> exports,
                 void* priv) {
   gin_helper::Dictionary dict(context->GetIsolate(), exports);
   dict.SetMethod("start", &electron::api::crash_reporter::Start);
-#if IS_MAS_BUILD()
+#if defined(MAS_BUILD)
   dict.SetMethod("addExtraParameter", &electron::api::crash_reporter::NoOp);
   dict.SetMethod("removeExtraParameter", &electron::api::crash_reporter::NoOp);
 #else
@@ -277,4 +303,4 @@ void Initialize(v8::Local<v8::Object> exports,
 
 }  // namespace
 
-NODE_LINKED_BINDING_CONTEXT_AWARE(electron_browser_crash_reporter, Initialize)
+NODE_LINKED_MODULE_CONTEXT_AWARE(electron_browser_crash_reporter, Initialize)

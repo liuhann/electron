@@ -10,7 +10,7 @@ certain properties and methods (e.g. `webFrame.firstChild`).
 
 An example of zooming current page to 200%.
 
-```js
+```javascript
 const { webFrame } = require('electron')
 
 webFrame.setZoomFactor(2)
@@ -96,12 +96,13 @@ with an array of misspelt words when complete.
 
 An example of using [node-spellchecker][spellchecker] as provider:
 
-```js @ts-expect-error=[2,6]
+```javascript
 const { webFrame } = require('electron')
 const spellChecker = require('spellchecker')
 webFrame.setSpellCheckProvider('en-US', {
   spellCheck (words, callback) {
     setTimeout(() => {
+      const spellchecker = require('spellchecker')
       const misspelled = words.filter(x => spellchecker.isMisspelled(x))
       callback(misspelled)
     }, 0)
@@ -113,7 +114,7 @@ webFrame.setSpellCheckProvider('en-US', {
 
 * `css` string
 * `options` Object (optional)
-  * `cssOrigin` string (optional) - Can be 'user' or 'author'. Sets the [cascade origin](https://www.w3.org/TR/css3-cascade/#cascade-origin) of the inserted stylesheet. Default is 'author'.
+  * `cssOrigin` string (optional) - Can be either 'user' or 'author'. Sets the [cascade origin](https://www.w3.org/TR/css3-cascade/#cascade-origin) of the inserted stylesheet. Default is 'author'.
 
 Returns `string` - A key for the inserted CSS that can later be used to remove
 the CSS via `webFrame.removeInsertedCSS(key)`.
@@ -205,14 +206,14 @@ Returns `Object`:
 Returns an object describing usage information of Blink's internal memory
 caches.
 
-```js
+```javascript
 const { webFrame } = require('electron')
 console.log(webFrame.getResourceUsage())
 ```
 
 This will generate:
 
-```js
+```javascript
 {
   images: {
     count: 22,

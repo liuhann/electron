@@ -42,7 +42,7 @@ OffScreenVideoConsumer::OffScreenVideoConsumer(
   video_capturer_->SetFormat(media::PIXEL_FORMAT_ARGB);
 
   SizeChanged(view_->SizeInPixels());
-  SetFrameRate(view_->frame_rate());
+  SetFrameRate(view_->GetFrameRate());
 }
 
 OffScreenVideoConsumer::~OffScreenVideoConsumer() = default;
@@ -120,7 +120,7 @@ void OffScreenVideoConsumer::OnFrameCaptured(
       SkImageInfo::MakeN32(content_rect.width(), content_rect.height(),
                            kPremul_SkAlphaType),
       pixels,
-      media::VideoFrame::RowBytes(media::VideoFrame::Plane::kARGB,
+      media::VideoFrame::RowBytes(media::VideoFrame::kARGBPlane,
                                   info->pixel_format, info->coded_size.width()),
       [](void* addr, void* context) {
         delete static_cast<FramePinner*>(context);
@@ -128,16 +128,13 @@ void OffScreenVideoConsumer::OnFrameCaptured(
       new FramePinner{std::move(mapping), callbacks_remote.Unbind()});
   bitmap.setImmutable();
 
-  std::optional<gfx::Rect> update_rect = info->metadata.capture_update_rect;
+  absl::optional<gfx::Rect> update_rect = info->metadata.capture_update_rect;
   if (!update_rect.has_value() || update_rect->IsEmpty()) {
     update_rect = content_rect;
   }
 
   callback_.Run(*update_rect, bitmap);
 }
-
-void OffScreenVideoConsumer::OnNewSubCaptureTargetVersion(
-    uint32_t crop_version) {}
 
 void OffScreenVideoConsumer::OnFrameWithEmptyRegionCapture() {}
 

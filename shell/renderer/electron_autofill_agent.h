@@ -21,9 +21,9 @@
 
 namespace electron {
 
-class AutofillAgent : private content::RenderFrameObserver,
-                      private blink::WebAutofillClient,
-                      private mojom::ElectronAutofillAgent {
+class AutofillAgent : public content::RenderFrameObserver,
+                      public blink::WebAutofillClient,
+                      public mojom::ElectronAutofillAgent {
  public:
   explicit AutofillAgent(content::RenderFrame* frame,
                          blink::AssociatedInterfaceRegistry* registry);
@@ -33,9 +33,8 @@ class AutofillAgent : private content::RenderFrameObserver,
   AutofillAgent(const AutofillAgent&) = delete;
   AutofillAgent& operator=(const AutofillAgent&) = delete;
 
-  void BindPendingReceiver(
-      mojo::PendingAssociatedReceiver<mojom::ElectronAutofillAgent>
-          pending_receiver);
+  void BindReceiver(
+      mojo::PendingAssociatedReceiver<mojom::ElectronAutofillAgent> receiver);
 
   // content::RenderFrameObserver:
   void OnDestruct() override;
@@ -48,17 +47,10 @@ class AutofillAgent : private content::RenderFrameObserver,
 
  private:
   struct ShowSuggestionsOptions {
-    // Specifies that suggestions should be shown when |element| contains no
-    // text.
-    bool autofill_on_empty_values{false};
-    // Specifies that suggestions should be shown when the caret is not
-    // after the last character in the element.
-    bool requires_caret_at_end{false};
+    ShowSuggestionsOptions();
+    bool autofill_on_empty_values;
+    bool requires_caret_at_end;
   };
-
-  // Shuts the AutofillAgent down on RenderFrame deletion. Safe to call multiple
-  // times.
-  void Shutdown();
 
   // blink::WebAutofillClient:
   void TextFieldDidEndEditing(const blink::WebInputElement&) override;
@@ -80,7 +72,7 @@ class AutofillAgent : private content::RenderFrameObserver,
   void ShowSuggestions(const blink::WebFormControlElement& element,
                        const ShowSuggestionsOptions& options);
 
-  void HandleFocusChangeComplete();
+  void DoFocusChangeComplete();
 
   const mojo::AssociatedRemote<mojom::ElectronAutofillDriver>&
   GetAutofillDriver();

@@ -4,7 +4,6 @@
 
 #include <utility>
 
-#include "net/cert/cert_verify_result.h"
 #include "shell/browser/net/cert_verifier_client.h"
 
 namespace electron {
@@ -26,7 +25,7 @@ void CertVerifierClient::Verify(
     const scoped_refptr<net::X509Certificate>& certificate,
     const std::string& hostname,
     int flags,
-    const std::optional<std::string>& ocsp_response,
+    const absl::optional<std::string>& ocsp_response,
     VerifyCallback callback) {
   VerifyRequestParams params;
   params.hostname = hostname;

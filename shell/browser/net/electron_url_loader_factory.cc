@@ -4,16 +4,13 @@
 
 #include "shell/browser/net/electron_url_loader_factory.h"
 
-#include <list>
 #include <memory>
 #include <string>
-#include <string_view>
 #include <utility>
 
-#include "base/containers/fixed_flat_map.h"
+#include "base/guid.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
-#include "base/uuid.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/storage_partition.h"
 #include "mojo/public/cpp/system/data_pipe_producer.h"
@@ -47,17 +44,22 @@ struct Converter<electron::ProtocolType> {
   static bool FromV8(v8::Isolate* isolate,
                      v8::Local<v8::Value> val,
                      electron::ProtocolType* out) {
-    using Val = electron::ProtocolType;
-    static constexpr auto Lookup =
-        base::MakeFixedFlatMap<std::string_view, Val>({
-            // note "free" is internal type, not allowed to be passed from user
-            {"buffer", Val::kBuffer},
-            {"file", Val::kFile},
-            {"http", Val::kHttp},
-            {"stream", Val::kStream},
-            {"string", Val::kString},
-        });
-    return FromV8WithLookup(isolate, val, Lookup, out);
+    std::string type;
+    if (!ConvertFromV8(isolate, val, &type))
+      return false;
+    if (type == "buffer")
+      *out = electron::ProtocolType::kBuffer;
+    else if (type == "string")
+      *out = electron::ProtocolType::kString;
+    else if (type == "file")
+      *out = electron::ProtocolType::kFile;
+    else if (type == "http")
+      *out = electron::ProtocolType::kHttp;
+    else if (type == "stream")
+      *out = electron::ProtocolType::kStream;
+    else  // note "free" is internal type, not allowed to be passed from user
+      return false;
+    return true;
   }
 };
 
@@ -77,19 +79,6 @@ bool ResponseMustBeObject(ProtocolType type) {
     default:
       return true;
   }
-}
-
-bool LooksLikeStream(v8::Isolate* isolate, v8::Local<v8::Value> v) {
-  // the stream loader can handle null and undefined as "empty body". Could
-  // probably be more efficient here but this works.
-  if (v->IsNullOrUndefined())
-    return true;
-  if (!v->IsObject())
-    return false;
-  gin_helper::Dictionary dict(isolate, v.As<v8::Object>());
-  v8::Local<v8::Value> method;
-  return dict.Get("on", &method) && method->IsFunction() &&
-         dict.Get("removeListener", &method) && method->IsFunction();
 }
 
 // Helper to convert value to Dictionary.
@@ -125,15 +114,15 @@ network::mojom::URLResponseHeadPtr ToResponseHead(
   bool has_mime_type = dict.Get("mimeType", &head->mime_type);
   bool has_content_type = false;
 
-  base::Value::Dict headers;
+  base::DictionaryValue headers;
   if (dict.Get("headers", &headers)) {
-    for (const auto iter : headers) {
+    for (const auto iter : headers.DictItems()) {
       if (iter.second.is_string()) {
         // key, value
         head->headers->AddHeader(iter.first, iter.second.GetString());
       } else if (iter.second.is_list()) {
         // key: [values...]
-        for (const auto& item : iter.second.GetList()) {
+        for (const auto& item : iter.second.GetListDeprecated()) {
           if (item.is_string())
             head->headers->AddHeader(iter.first, item.GetString());
         }
@@ -212,7 +201,7 @@ void ElectronURLLoaderFactory::RedirectedRequest::FollowRedirect(
     const std::vector<std::string>& removed_headers,
     const net::HttpRequestHeaders& modified_headers,
     const net::HttpRequestHeaders& modified_cors_exempt_headers,
-    const std::optional<GURL>& new_url) {
+    const absl::optional<GURL>& new_url) {
   // Update |request_| with info from the redirect, so that it's accurate
   // The following references code in WorkerScriptLoader::FollowRedirect
   bool should_clear_upload = false;
@@ -401,94 +390,36 @@ void ElectronURLLoaderFactory::StartLoading(
   }
 
   switch (type) {
-    // DEPRECATED: Soon only |kFree| will be supported!
     case ProtocolType::kBuffer:
-      if (response->IsArrayBufferView())
-        StartLoadingBuffer(std::move(client), std::move(head),
-                           response.As<v8::ArrayBufferView>());
-      else if (v8::Local<v8::Value> data; !dict.IsEmpty() &&
-                                          dict.Get("data", &data) &&
-                                          data->IsArrayBufferView())
-        StartLoadingBuffer(std::move(client), std::move(head),
-                           data.As<v8::ArrayBufferView>());
-      else
-        OnComplete(std::move(client), request_id,
-                   network::URLLoaderCompletionStatus(net::ERR_FAILED));
+      StartLoadingBuffer(std::move(client), std::move(head), dict);
       break;
-    case ProtocolType::kString: {
-      std::string data;
-      if (gin::ConvertFromV8(args->isolate(), response, &data))
-        SendContents(std::move(client), std::move(head), data);
-      else if (!dict.IsEmpty() && dict.Get("data", &data))
-        SendContents(std::move(client), std::move(head), data);
-      else
-        OnComplete(std::move(client), request_id,
-                   network::URLLoaderCompletionStatus(net::ERR_FAILED));
+    case ProtocolType::kString:
+      StartLoadingString(std::move(client), std::move(head), dict,
+                         args->isolate(), response);
       break;
-    }
-    case ProtocolType::kFile: {
-      base::FilePath path;
-      if (gin::ConvertFromV8(args->isolate(), response, &path))
-        StartLoadingFile(std::move(client), std::move(loader), std::move(head),
-                         request, path, dict);
-      else if (!dict.IsEmpty() && dict.Get("path", &path))
-        StartLoadingFile(std::move(client), std::move(loader), std::move(head),
-                         request, path, dict);
-      else
-        OnComplete(std::move(client), request_id,
-                   network::URLLoaderCompletionStatus(net::ERR_FAILED));
+    case ProtocolType::kFile:
+      StartLoadingFile(std::move(loader), request, std::move(client),
+                       std::move(head), dict, args->isolate(), response);
       break;
-    }
     case ProtocolType::kHttp:
-      if (GURL url; !dict.IsEmpty() && dict.Get("url", &url) && url.is_valid())
-        StartLoadingHttp(std::move(client), std::move(loader), request,
-                         traffic_annotation, dict);
-      else
-        OnComplete(std::move(client), request_id,
-                   network::URLLoaderCompletionStatus(net::ERR_FAILED));
+      StartLoadingHttp(std::move(loader), request, std::move(client),
+                       traffic_annotation, dict);
       break;
     case ProtocolType::kStream:
-      StartLoadingStream(std::move(client), std::move(loader), std::move(head),
+      StartLoadingStream(std::move(loader), std::move(client), std::move(head),
                          dict);
       break;
-
-    case ProtocolType::kFree: {
-      // Infer the type based on the object given
-      v8::Local<v8::Value> data;
-      if (!dict.IsEmpty() && dict.Has("data"))
-        dict.Get("data", &data);
-      else
-        data = response;
-
-      // |data| can be either a string, a buffer or a stream.
-      if (data->IsArrayBufferView()) {
-        StartLoadingBuffer(std::move(client), std::move(head),
-                           data.As<v8::ArrayBufferView>());
-      } else if (data->IsString()) {
-        SendContents(std::move(client), std::move(head),
-                     gin::V8ToString(args->isolate(), data));
-      } else if (LooksLikeStream(args->isolate(), data)) {
-        StartLoadingStream(std::move(client), std::move(loader),
-                           std::move(head), dict);
-      } else if (!dict.IsEmpty()) {
-        // |data| wasn't specified, so look for |response.url| or
-        // |response.path|.
-        if (GURL url; dict.Get("url", &url))
-          StartLoadingHttp(std::move(client), std::move(loader), request,
-                           traffic_annotation, dict);
-        else if (base::FilePath path; dict.Get("path", &path))
-          StartLoadingFile(std::move(client), std::move(loader),
-                           std::move(head), request, path, dict);
-        else
-          // Don't know what kind of response this is, so fail.
-          OnComplete(std::move(client), request_id,
-                     network::URLLoaderCompletionStatus(net::ERR_FAILED));
-      } else {
+    case ProtocolType::kFree:
+      ProtocolType type;
+      if (!gin::ConvertFromV8(args->isolate(), response, &type)) {
         OnComplete(std::move(client), request_id,
                    network::URLLoaderCompletionStatus(net::ERR_FAILED));
+        return;
       }
+      StartLoading(std::move(loader), request_id, options, request,
+                   std::move(client), traffic_annotation,
+                   std::move(target_factory), type, args);
       break;
-    }
   }
 }
 
@@ -496,25 +427,68 @@ void ElectronURLLoaderFactory::StartLoading(
 void ElectronURLLoaderFactory::StartLoadingBuffer(
     mojo::PendingRemote<network::mojom::URLLoaderClient> client,
     network::mojom::URLResponseHeadPtr head,
-    v8::Local<v8::ArrayBufferView> buffer) {
-  SendContents(std::move(client), std::move(head),
-               std::string(node::Buffer::Data(buffer.As<v8::Value>()),
-                           node::Buffer::Length(buffer.As<v8::Value>())));
+    const gin_helper::Dictionary& dict) {
+  v8::Local<v8::Value> buffer = dict.GetHandle();
+  dict.Get("data", &buffer);
+  if (!node::Buffer::HasInstance(buffer)) {
+    mojo::Remote<network::mojom::URLLoaderClient> client_remote(
+        std::move(client));
+    client_remote->OnComplete(
+        network::URLLoaderCompletionStatus(net::ERR_FAILED));
+    return;
+  }
+
+  SendContents(
+      std::move(client), std::move(head),
+      std::string(node::Buffer::Data(buffer), node::Buffer::Length(buffer)));
+}
+
+// static
+void ElectronURLLoaderFactory::StartLoadingString(
+    mojo::PendingRemote<network::mojom::URLLoaderClient> client,
+    network::mojom::URLResponseHeadPtr head,
+    const gin_helper::Dictionary& dict,
+    v8::Isolate* isolate,
+    v8::Local<v8::Value> response) {
+  std::string contents;
+  if (response->IsString()) {
+    contents = gin::V8ToString(isolate, response);
+  } else if (!dict.IsEmpty()) {
+    dict.Get("data", &contents);
+  } else {
+    mojo::Remote<network::mojom::URLLoaderClient> client_remote(
+        std::move(client));
+    client_remote->OnComplete(
+        network::URLLoaderCompletionStatus(net::ERR_FAILED));
+    return;
+  }
+
+  SendContents(std::move(client), std::move(head), std::move(contents));
 }
 
 // static
 void ElectronURLLoaderFactory::StartLoadingFile(
-    mojo::PendingRemote<network::mojom::URLLoaderClient> client,
     mojo::PendingReceiver<network::mojom::URLLoader> loader,
+    network::ResourceRequest request,
+    mojo::PendingRemote<network::mojom::URLLoaderClient> client,
     network::mojom::URLResponseHeadPtr head,
-    const network::ResourceRequest& original_request,
-    const base::FilePath& path,
-    const gin_helper::Dictionary& opts) {
-  network::ResourceRequest request = original_request;
-  request.url = net::FilePathToFileURL(path);
-  if (!opts.IsEmpty()) {
-    opts.Get("referrer", &request.referrer);
-    opts.Get("method", &request.method);
+    const gin_helper::Dictionary& dict,
+    v8::Isolate* isolate,
+    v8::Local<v8::Value> response) {
+  base::FilePath path;
+  if (gin::ConvertFromV8(isolate, response, &path)) {
+    request.url = net::FilePathToFileURL(path);
+  } else if (!dict.IsEmpty()) {
+    dict.Get("referrer", &request.referrer);
+    dict.Get("method", &request.method);
+    if (dict.Get("path", &path))
+      request.url = net::FilePathToFileURL(path);
+  } else {
+    mojo::Remote<network::mojom::URLLoaderClient> client_remote(
+        std::move(client));
+    client_remote->OnComplete(
+        network::URLLoaderCompletionStatus(net::ERR_FAILED));
+    return;
   }
 
   // Add header to ignore CORS.
@@ -525,9 +499,9 @@ void ElectronURLLoaderFactory::StartLoadingFile(
 
 // static
 void ElectronURLLoaderFactory::StartLoadingHttp(
-    mojo::PendingRemote<network::mojom::URLLoaderClient> client,
     mojo::PendingReceiver<network::mojom::URLLoader> loader,
     const network::ResourceRequest& original_request,
+    mojo::PendingRemote<network::mojom::URLLoaderClient> client,
     const net::MutableNetworkTrafficAnnotationTag& traffic_annotation,
     const gin_helper::Dictionary& dict) {
   auto request = std::make_unique<network::ResourceRequest>();
@@ -539,7 +513,7 @@ void ElectronURLLoaderFactory::StartLoadingHttp(
   if (!dict.Get("method", &request->method))
     request->method = original_request.method;
 
-  base::Value::Dict upload_data;
+  base::DictionaryValue upload_data;
   if (request->method != net::HttpRequestHeaders::kGetMethod &&
       request->method != net::HttpRequestHeaders::kHeadMethod)
     dict.Get("uploadData", &upload_data);
@@ -549,8 +523,8 @@ void ElectronURLLoaderFactory::StartLoadingHttp(
   v8::Local<v8::Value> value;
   if (dict.Get("session", &value)) {
     if (value->IsNull()) {
-      browser_context = ElectronBrowserContext::From(
-          base::Uuid::GenerateRandomV4().AsLowercaseString(), true);
+      browser_context =
+          ElectronBrowserContext::From(base::GenerateGUID(), true);
     } else {
       gin::Handle<api::Session> session;
       if (gin::ConvertFromV8(dict.isolate(), value, &session) &&
@@ -569,8 +543,8 @@ void ElectronURLLoaderFactory::StartLoadingHttp(
 
 // static
 void ElectronURLLoaderFactory::StartLoadingStream(
-    mojo::PendingRemote<network::mojom::URLLoaderClient> client,
     mojo::PendingReceiver<network::mojom::URLLoader> loader,
+    mojo::PendingRemote<network::mojom::URLLoaderClient> client,
     network::mojom::URLResponseHeadPtr head,
     const gin_helper::Dictionary& dict) {
   v8::Local<v8::Value> stream;
@@ -592,8 +566,7 @@ void ElectronURLLoaderFactory::StartLoadingStream(
     //
     // Note that We must submit a empty body otherwise NetworkService would
     // crash.
-    client_remote->OnReceiveResponse(std::move(head), std::move(consumer),
-                                     std::nullopt);
+    client_remote->OnReceiveResponse(std::move(head), std::move(consumer));
     producer.reset();  // The data pipe is empty.
     client_remote->OnComplete(network::URLLoaderCompletionStatus(net::OK));
     return;
@@ -640,8 +613,7 @@ void ElectronURLLoaderFactory::SendContents(
     return;
   }
 
-  client_remote->OnReceiveResponse(std::move(head), std::move(consumer),
-                                   std::nullopt);
+  client_remote->OnReceiveResponse(std::move(head), std::move(consumer));
 
   auto write_data = std::make_unique<WriteData>();
   write_data->client = std::move(client_remote);

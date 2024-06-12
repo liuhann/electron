@@ -5,12 +5,12 @@
 #ifndef ELECTRON_SHELL_BROWSER_FILE_SELECT_HELPER_H_
 #define ELECTRON_SHELL_BROWSER_FILE_SELECT_HELPER_H_
 
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "base/compiler_specific.h"
-#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "build/build_config.h"
 #include "content/public/browser/browser_thread.h"
@@ -41,7 +41,8 @@ class FileSelectHelper : public base::RefCountedThreadSafe<
                              FileSelectHelper,
                              content::BrowserThread::DeleteOnUIThread>,
                          public ui::SelectFileDialog::Listener,
-                         private content::WebContentsObserver,
+                         public content::WebContentsObserver,
+                         public content::RenderWidgetHostObserver,
                          private net::DirectoryLister::DirectoryListerDelegate {
  public:
   // disable copy
@@ -84,12 +85,22 @@ class FileSelectHelper : public base::RefCountedThreadSafe<
   void RunFileChooserEnd();
 
   // SelectFileDialog::Listener overrides.
-  void FileSelected(const ui::SelectedFileInfo& file,
+  void FileSelected(const base::FilePath& path,
                     int index,
                     void* params) override;
-  void MultiFilesSelected(const std::vector<ui::SelectedFileInfo>& files,
+  void FileSelectedWithExtraInfo(const ui::SelectedFileInfo& file,
+                                 int index,
+                                 void* params) override;
+  void MultiFilesSelected(const std::vector<base::FilePath>& files,
                           void* params) override;
+  void MultiFilesSelectedWithExtraInfo(
+      const std::vector<ui::SelectedFileInfo>& files,
+      void* params) override;
   void FileSelectionCanceled(void* params) override;
+
+  // content::RenderWidgetHostObserver overrides.
+  void RenderWidgetHostDestroyed(
+      content::RenderWidgetHost* widget_host) override;
 
   // content::WebContentsObserver overrides.
   void RenderFrameHostChanged(content::RenderFrameHost* old_host,
@@ -182,8 +193,8 @@ class FileSelectHelper : public base::RefCountedThreadSafe<
 
   // The RenderFrameHost and WebContents for the page showing a file dialog
   // (may only be one such dialog).
-  raw_ptr<content::RenderFrameHost> render_frame_host_;
-  raw_ptr<content::WebContents> web_contents_;
+  content::RenderFrameHost* render_frame_host_;
+  content::WebContents* web_contents_;
 
   // |listener_| receives the result of the FileSelectHelper.
   scoped_refptr<content::FileSelectListener> listener_;
@@ -208,6 +219,10 @@ class FileSelectHelper : public base::RefCountedThreadSafe<
   // more than one going on at a time.
   struct ActiveDirectoryEnumeration;
   std::unique_ptr<ActiveDirectoryEnumeration> directory_enumeration_;
+
+  base::ScopedObservation<content::RenderWidgetHost,
+                          content::RenderWidgetHostObserver>
+      observation_{this};
 
   // Temporary files only used on OSX. This class is responsible for deleting
   // these files when they are no longer needed.

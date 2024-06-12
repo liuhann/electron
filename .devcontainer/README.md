@@ -4,13 +4,14 @@ Welcome to the Codespaces Electron Developer Environment.
 
 ## Quick Start
 
-Upon creation of your codespace you should have [build tools](https://github.com/electron/build-tools) installed and an initialized gclient checkout of Electron.  In order to build electron you'll need to run the following command.
+Upon creation of your codespace you should have [build tools](https://github.com/electron/build-tools) installed and an initialized gclient checkout of Electron.  In order to build electron you'll need to run the following commands.
 
 ```bash
+e sync -vv
 e build
 ```
 
-The initial build will take ~8 minutes.  Incremental builds are substantially quicker.  If you pull changes from upstream that touch either the `patches` folder or the `DEPS` folder you will have to run `e sync` in order to keep your checkout up to date.
+The initial sync will take approximately ~30 minutes and the build will take ~8 minutes.  Incremental syncs and incremental builds are substantially quicker.
 
 ## Directory Structure
 

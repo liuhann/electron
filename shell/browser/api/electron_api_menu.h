@@ -8,8 +8,7 @@
 #include <memory>
 #include <string>
 
-#include "base/functional/callback.h"
-#include "base/memory/raw_ptr.h"
+#include "base/callback.h"
 #include "gin/arguments.h"
 #include "shell/browser/api/electron_api_base_window.h"
 #include "shell/browser/event_emitter_mixin.h"
@@ -17,23 +16,25 @@
 #include "shell/common/gin_helper/constructible.h"
 #include "shell/common/gin_helper/pinnable.h"
 
-namespace electron::api {
+namespace electron {
+
+namespace api {
 
 class Menu : public gin::Wrappable<Menu>,
              public gin_helper::EventEmitterMixin<Menu>,
              public gin_helper::Constructible<Menu>,
              public gin_helper::Pinnable<Menu>,
              public ElectronMenuModel::Delegate,
-             private ElectronMenuModel::Observer {
+             public ElectronMenuModel::Observer {
  public:
   // gin_helper::Constructible
   static gin::Handle<Menu> New(gin::Arguments* args);
-  static void FillObjectTemplate(v8::Isolate*, v8::Local<v8::ObjectTemplate>);
-  static const char* GetClassName() { return "Menu"; }
+  static v8::Local<v8::ObjectTemplate> FillObjectTemplate(
+      v8::Isolate*,
+      v8::Local<v8::ObjectTemplate>);
 
   // gin::Wrappable
   static gin::WrapperInfo kWrapperInfo;
-  const char* GetTypeName() override;
 
 #if BUILDFLAG(IS_MAC)
   // Set the global menubar.
@@ -80,13 +81,12 @@ class Menu : public gin::Wrappable<Menu>,
                        int x,
                        int y,
                        int positioning_item,
-                       ui::MenuSourceType source_type,
                        base::OnceClosure callback) = 0;
   virtual void ClosePopupAt(int32_t window_id) = 0;
   virtual std::u16string GetAcceleratorTextAtForTesting(int index) const;
 
   std::unique_ptr<ElectronMenuModel> model_;
-  raw_ptr<Menu> parent_ = nullptr;
+  Menu* parent_ = nullptr;
 
   // Observable:
   void OnMenuWillClose() override;
@@ -123,7 +123,9 @@ class Menu : public gin::Wrappable<Menu>,
   bool WorksWhenHiddenAt(int index) const;
 };
 
-}  // namespace electron::api
+}  // namespace api
+
+}  // namespace electron
 
 namespace gin {
 
@@ -132,7 +134,7 @@ struct Converter<electron::ElectronMenuModel*> {
   static bool FromV8(v8::Isolate* isolate,
                      v8::Local<v8::Value> val,
                      electron::ElectronMenuModel** out) {
-    // null would be transferred to nullptr.
+    // null would be transferred to NULL.
     if (val->IsNull()) {
       *out = nullptr;
       return true;

@@ -6,7 +6,7 @@
 
 #include <utility>
 
-#include "base/functional/callback.h"
+#include "base/callback.h"
 
 namespace electron {
 
@@ -21,6 +21,9 @@ void ElectronSpeechRecognitionManagerDelegate::OnRecognitionStart(
 
 void ElectronSpeechRecognitionManagerDelegate::OnAudioStart(int session_id) {}
 
+void ElectronSpeechRecognitionManagerDelegate::OnEnvironmentEstimationComplete(
+    int session_id) {}
+
 void ElectronSpeechRecognitionManagerDelegate::OnSoundStart(int session_id) {}
 
 void ElectronSpeechRecognitionManagerDelegate::OnSoundEnd(int session_id) {}
@@ -32,11 +35,11 @@ void ElectronSpeechRecognitionManagerDelegate::OnRecognitionEnd(
 
 void ElectronSpeechRecognitionManagerDelegate::OnRecognitionResults(
     int session_id,
-    const std::vector<media::mojom::WebSpeechRecognitionResultPtr>& results) {}
+    const std::vector<blink::mojom::SpeechRecognitionResultPtr>& results) {}
 
 void ElectronSpeechRecognitionManagerDelegate::OnRecognitionError(
     int session_id,
-    const media::mojom::SpeechRecognitionError& error) {}
+    const blink::mojom::SpeechRecognitionError& error) {}
 
 void ElectronSpeechRecognitionManagerDelegate::OnAudioLevelsChange(
     int session_id,
@@ -58,8 +61,5 @@ bool ElectronSpeechRecognitionManagerDelegate::FilterProfanities(
     int render_process_id) {
   return false;
 }
-
-void ElectronSpeechRecognitionManagerDelegate::BindSpeechRecognitionContext(
-    mojo::PendingReceiver<media::mojom::SpeechRecognitionContext> receiver) {}
 
 }  // namespace electron

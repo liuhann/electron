@@ -28,14 +28,12 @@ namespace electron {
 class ElectronSerialDelegate;
 
 // SerialChooserController provides data for the Serial API permission prompt.
-class SerialChooserController final
-    : private SerialChooserContext::PortObserver,
-      private content::WebContentsObserver {
+class SerialChooserController final : public SerialChooserContext::PortObserver,
+                                      public content::WebContentsObserver {
  public:
   SerialChooserController(
       content::RenderFrameHost* render_frame_host,
       std::vector<blink::mojom::SerialPortFilterPtr> filters,
-      std::vector<::device::BluetoothUUID> allowed_bluetooth_service_class_ids,
       content::SerialChooser::Callback callback,
       content::WebContents* web_contents,
       base::WeakPtr<ElectronSerialDelegate> serial_delegate);
@@ -48,8 +46,6 @@ class SerialChooserController final
   // SerialChooserContext::PortObserver:
   void OnPortAdded(const device::mojom::SerialPortInfo& port) override;
   void OnPortRemoved(const device::mojom::SerialPortInfo& port) override;
-  void OnPortConnectedStateChanged(
-      const device::mojom::SerialPortInfo& port) override {}
   void OnPortManagerConnectionError() override;
   void OnPermissionRevoked(const url::Origin& origin) override {}
   void OnSerialChooserContextShutdown() override;
@@ -57,19 +53,20 @@ class SerialChooserController final
  private:
   api::Session* GetSession();
   void OnGetDevices(std::vector<device::mojom::SerialPortInfoPtr> ports);
-  bool DisplayDevice(const device::mojom::SerialPortInfo& port) const;
+  bool FilterMatchesAny(const device::mojom::SerialPortInfo& port) const;
   void RunCallback(device::mojom::SerialPortInfoPtr port);
   void OnDeviceChosen(const std::string& port_id);
 
   std::vector<blink::mojom::SerialPortFilterPtr> filters_;
-  std::vector<::device::BluetoothUUID> allowed_bluetooth_service_class_ids_;
   content::SerialChooser::Callback callback_;
   url::Origin origin_;
 
   base::WeakPtr<SerialChooserContext> chooser_context_;
 
   base::ScopedObservation<SerialChooserContext,
-                          SerialChooserContext::PortObserver>
+                          SerialChooserContext::PortObserver,
+                          &SerialChooserContext::AddPortObserver,
+                          &SerialChooserContext::RemovePortObserver>
       observation_{this};
 
   std::vector<device::mojom::SerialPortInfoPtr> ports_;

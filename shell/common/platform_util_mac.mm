@@ -11,20 +11,16 @@
 #import <Cocoa/Cocoa.h>
 #import <ServiceManagement/ServiceManagement.h>
 
-#include "base/apple/foundation_util.h"
-#include "base/apple/osstatus_logging.h"
+#include "base/callback.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
-#include "base/functional/bind.h"
-#include "base/functional/callback.h"
 #include "base/logging.h"
+#include "base/mac/foundation_util.h"
+#include "base/mac/mac_logging.h"
 #include "base/mac/scoped_aedesc.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/sys_string_conversions.h"
-#include "base/task/thread_pool.h"
-#include "content/public/browser/browser_task_traits.h"
-#include "content/public/browser/browser_thread.h"
-#include "net/base/apple/url_conversions.h"
+#include "net/base/mac/url_conversions.h"
 #include "ui/views/widget/widget.h"
 #include "url/gurl.h"
 
@@ -34,13 +30,12 @@ namespace {
 // thread safe, including LSGetApplicationForURL (> 10.2) and
 // NSWorkspace#openURLs.
 std::string OpenURL(NSURL* ns_url, bool activate) {
-  CFURLRef cf_url = (__bridge CFURLRef)(ns_url);
-  CFURLRef ref =
-      LSCopyDefaultApplicationURLForURL(cf_url, kLSRolesAll, nullptr);
+  CFURLRef ref = LSCopyDefaultApplicationURLForURL(
+      base::mac::NSToCFCast(ns_url), kLSRolesAll, nullptr);
 
-  // If no application could be found, nullptr is returned and outError
-  // (if not nullptr) is populated with kLSApplicationNotFoundErr.
-  if (ref == nullptr)
+  // If no application could be found, NULL is returned and outError
+  // (if not NULL) is populated with kLSApplicationNotFoundErr.
+  if (ref == NULL)
     return "No application in the Launch Services database matches the input "
            "criteria.";
 
@@ -76,84 +71,9 @@ std::string OpenPathOnThread(const base::FilePath& full_path) {
                                  withAppBundleIdentifier:nil
                                                  options:launch_options
                           additionalEventParamDescriptor:nil
-                                       launchIdentifiers:nil];
+                                       launchIdentifiers:NULL];
 
   return success ? "" : "Failed to open path";
-}
-
-// https://developer.apple.com/documentation/servicemanagement/1561515-service_management_errors?language=objc
-std::string GetLaunchStringForError(NSError* error) {
-  if (@available(macOS 13, *)) {
-    switch ([error code]) {
-      case kSMErrorAlreadyRegistered:
-        return "The application is already registered";
-      case kSMErrorAuthorizationFailure:
-        return "The authorization requested failed";
-      case kSMErrorLaunchDeniedByUser:
-        return "The user denied the app's launch request";
-      case kSMErrorInternalFailure:
-        return "An internal failure has occurred";
-      case kSMErrorInvalidPlist:
-        return "The app's property list is invalid";
-      case kSMErrorInvalidSignature:
-        return "The app's code signature doesn't meet the requirements to "
-               "perform the operation";
-      case kSMErrorJobMustBeEnabled:
-        return "The specified job is not enabled";
-      case kSMErrorJobNotFound:
-        return "The system can't find the specified job";
-      case kSMErrorJobPlistNotFound:
-        return "The app's property list cannot be found";
-      case kSMErrorServiceUnavailable:
-        return "The service necessary to perform this operation is unavailable "
-               "or is no longer accepting requests";
-      case kSMErrorToolNotValid:
-        return "The specified path doesn't exist or the helper tool at the "
-               "specified path isn't valid";
-      default:
-        return "Failed to register the login item";
-    }
-  }
-
-  return "";
-}
-
-SMAppService* GetServiceForType(const std::string& type,
-                                const std::string& name)
-    API_AVAILABLE(macosx(13.0)) {
-  NSString* service_name = [NSString stringWithUTF8String:name.c_str()];
-  if (type == "mainAppService") {
-    return [SMAppService mainAppService];
-  } else if (type == "agentService") {
-    return [SMAppService agentServiceWithPlistName:service_name];
-  } else if (type == "daemonService") {
-    return [SMAppService daemonServiceWithPlistName:service_name];
-  } else if (type == "loginItemService") {
-    return [SMAppService loginItemServiceWithIdentifier:service_name];
-  } else {
-    LOG(ERROR) << "Unrecognized login item type";
-    return nullptr;
-  }
-}
-
-bool GetLoginItemEnabledDeprecated() {
-  BOOL enabled = NO;
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-  // SMJobCopyDictionary does not work in sandbox (see rdar://13626319)
-  CFArrayRef jobs = SMCopyAllJobDictionaries(kSMDomainUserLaunchd);
-#pragma clang diagnostic pop
-  NSArray* jobs_ = CFBridgingRelease(jobs);
-  NSString* identifier = GetLoginHelperBundleIdentifier();
-  if (jobs_ && [jobs_ count] > 0) {
-    for (NSDictionary* job in jobs_) {
-      if ([identifier isEqualToString:[job objectForKey:@"Label"]]) {
-        enabled = [[job objectForKey:@"OnDemand"] boolValue];
-        break;
-      }
-    }
-  }
-  return enabled;
 }
 
 }  // namespace
@@ -187,12 +107,27 @@ void OpenExternal(const GURL& url,
     return;
   }
 
-  base::ThreadPool::PostTaskAndReplyWithResult(
-      FROM_HERE,
-      {base::MayBlock(), base::WithBaseSyncPrimitives(),
-       base::TaskPriority::USER_BLOCKING,
-       base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN},
-      base::BindOnce(&OpenURL, ns_url, options.activate), std::move(callback));
+  bool activate = options.activate;
+  __block OpenCallback c = std::move(callback);
+  dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0),
+                 ^{
+                   __block std::string error = OpenURL(ns_url, activate);
+                   dispatch_async(dispatch_get_main_queue(), ^{
+                     std::move(c).Run(error);
+                   });
+                 });
+}
+
+// The following function helps with debug builds on the Mac
+gfx::NativeView GetViewForWindow(gfx::NativeWindow native_window) {
+  NOTREACHED();
+  return nil;
+}
+
+// The following function helps with debug builds on the Mac
+gfx::NativeView GetParent(gfx::NativeView view) {
+  NOTREACHED();
+  return nil;
 }
 
 bool MoveItemToTrashWithError(const base::FilePath& full_path,
@@ -243,50 +178,29 @@ void Beep() {
   NSBeep();
 }
 
-std::string GetLoginItemEnabled(const std::string& type,
-                                const std::string& service_name) {
-  bool enabled = GetLoginItemEnabledDeprecated();
-  if (@available(macOS 13, *)) {
-    SMAppService* service = GetServiceForType(type, service_name);
-    SMAppServiceStatus status = [service status];
-    if (status == SMAppServiceStatusNotRegistered)
-      return "not-registered";
-    else if (status == SMAppServiceStatusEnabled)
-      return "enabled";
-    else if (status == SMAppServiceStatusRequiresApproval)
-      return "requires-approval";
-    else if (status == SMAppServiceStatusNotFound) {
-      // If the login item was enabled with the old API, return that.
-      return enabled ? "enabled-deprecated" : "not-found";
+bool GetLoginItemEnabled() {
+  BOOL enabled = NO;
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+  // SMJobCopyDictionary does not work in sandbox (see rdar://13626319)
+  CFArrayRef jobs = SMCopyAllJobDictionaries(kSMDomainUserLaunchd);
+#pragma clang diagnostic pop
+  NSArray* jobs_ = CFBridgingRelease(jobs);
+  NSString* identifier = GetLoginHelperBundleIdentifier();
+  if (jobs_ && [jobs_ count] > 0) {
+    for (NSDictionary* job in jobs_) {
+      if ([identifier isEqualToString:[job objectForKey:@"Label"]]) {
+        enabled = [[job objectForKey:@"OnDemand"] boolValue];
+        break;
+      }
     }
   }
-  return enabled ? "enabled" : "not-registered";
+  return enabled;
 }
 
-bool SetLoginItemEnabled(const std::string& type,
-                         const std::string& service_name,
-                         bool enabled) {
-  if (@available(macOS 13, *)) {
-#if IS_MAS_BUILD()
-    // If the app was previously set as a LoginItem with the old API, remove it
-    // as a LoginItem via the old API before re-enabling with the new API.
-    if (GetLoginItemEnabledDeprecated() && enabled) {
-      NSString* identifier = GetLoginHelperBundleIdentifier();
-      SMLoginItemSetEnabled((__bridge CFStringRef)identifier, false);
-    }
-#endif
-    SMAppService* service = GetServiceForType(type, service_name);
-    NSError* error = nil;
-    bool result = enabled ? [service registerAndReturnError:&error]
-                          : [service unregisterAndReturnError:&error];
-    if (error != nil)
-      LOG(ERROR) << "Unable to set login item: "
-                 << GetLaunchStringForError(error);
-    return result;
-  } else {
-    NSString* identifier = GetLoginHelperBundleIdentifier();
-    return SMLoginItemSetEnabled((__bridge CFStringRef)identifier, enabled);
-  }
+bool SetLoginItemEnabled(bool enabled) {
+  NSString* identifier = GetLoginHelperBundleIdentifier();
+  return SMLoginItemSetEnabled((__bridge CFStringRef)identifier, enabled);
 }
 
 }  // namespace platform_util

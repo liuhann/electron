@@ -2,12 +2,12 @@
 
 > Perform copy and paste operations on the system clipboard.
 
-Process: [Main](../glossary.md#main-process), [Renderer](../glossary.md#renderer-process) (non-sandboxed only)
+Process: [Main](../glossary.md#main-process), [Renderer](../glossary.md#renderer-process)
 
 On Linux, there is also a `selection` clipboard. To manipulate it
 you need to pass `selection` to each method:
 
-```js
+```javascript
 const { clipboard } = require('electron')
 
 clipboard.writeText('Example string', 'selection')
@@ -148,7 +148,10 @@ clipboard.
 ```js
 const { clipboard } = require('electron')
 
-clipboard.writeBookmark('Electron Homepage', 'https://electronjs.org')
+clipboard.writeBookmark({
+  text: 'https://electronjs.org',
+  bookmark: 'Electron Homepage'
+})
 ```
 
 ### `clipboard.readFindText()` _macOS_
@@ -223,7 +226,7 @@ clipboard.writeBuffer('public/utf8-plain-text', buffer)
 
 const ret = clipboard.readBuffer('public/utf8-plain-text')
 
-console.log(buffer.equals(ret))
+console.log(buffer.equals(out))
 // true
 ```
 

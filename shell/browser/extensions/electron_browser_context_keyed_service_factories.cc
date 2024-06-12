@@ -7,7 +7,8 @@
 #include "extensions/browser/updater/update_service_factory.h"
 #include "shell/browser/extensions/electron_extension_system_factory.h"
 
-namespace extensions::electron {
+namespace extensions {
+namespace electron {
 
 void EnsureBrowserContextKeyedServiceFactoriesBuilt() {
   // TODO(rockot): Remove this once UpdateService is supported across all
@@ -17,4 +18,5 @@ void EnsureBrowserContextKeyedServiceFactoriesBuilt() {
   ElectronExtensionSystemFactory::GetInstance();
 }
 
-}  // namespace extensions::electron
+}  // namespace electron
+}  // namespace extensions

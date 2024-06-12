@@ -6,9 +6,10 @@
 
 #include <memory>
 #include <utility>
+#include <vector>
 
-#include "base/functional/bind.h"
-#include "base/functional/callback.h"
+#include "base/bind.h"
+#include "base/callback.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"

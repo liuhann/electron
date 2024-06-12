@@ -5,22 +5,21 @@
 #include "shell/common/asar/archive.h"
 
 #include <string>
-#include <string_view>
 #include <utility>
 #include <vector>
 
 #include "base/check.h"
-#include "base/containers/span.h"
 #include "base/files/file.h"
 #include "base/files/file_util.h"
 #include "base/json/json_reader.h"
 #include "base/logging.h"
 #include "base/pickle.h"
+#include "base/strings/string_number_conversions.h"
+#include "base/threading/thread_restrictions.h"
 #include "base/values.h"
 #include "electron/fuses.h"
 #include "shell/common/asar/asar_util.h"
 #include "shell/common/asar/scoped_temporary_file.h"
-#include "shell/common/thread_restrictions.h"
 
 #if BUILDFLAG(IS_WIN)
 #include <io.h>
@@ -36,102 +35,110 @@ const char kSeparators[] = "\\/";
 const char kSeparators[] = "/";
 #endif
 
-const base::Value::Dict* GetNodeFromPath(std::string path,
-                                         const base::Value::Dict& root);
+bool GetNodeFromPath(std::string path,
+                     const base::DictionaryValue* root,
+                     const base::DictionaryValue** out);
 
 // Gets the "files" from "dir".
-const base::Value::Dict* GetFilesNode(const base::Value::Dict& root,
-                                      const base::Value::Dict& dir) {
+bool GetFilesNode(const base::DictionaryValue* root,
+                  const base::DictionaryValue* dir,
+                  const base::DictionaryValue** out) {
   // Test for symbol linked directory.
-  const std::string* link = dir.FindString("link");
+  const std::string* link = dir->FindStringKey("link");
   if (link != nullptr) {
-    const base::Value::Dict* linked_node = GetNodeFromPath(*link, root);
-    if (!linked_node)
-      return nullptr;
-    return linked_node->FindDict("files");
+    const base::DictionaryValue* linked_node = nullptr;
+    if (!GetNodeFromPath(*link, root, &linked_node))
+      return false;
+    dir = linked_node;
   }
 
-  return dir.FindDict("files");
+  return dir->GetDictionaryWithoutPathExpansion("files", out);
 }
 
 // Gets sub-file "name" from "dir".
-const base::Value::Dict* GetChildNode(const base::Value::Dict& root,
-                                      const std::string& name,
-                                      const base::Value::Dict& dir) {
-  if (name.empty())
-    return &root;
+bool GetChildNode(const base::DictionaryValue* root,
+                  const std::string& name,
+                  const base::DictionaryValue* dir,
+                  const base::DictionaryValue** out) {
+  if (name.empty()) {
+    *out = root;
+    return true;
+  }
 
-  const base::Value::Dict* files = GetFilesNode(root, dir);
-  return files ? files->FindDict(name) : nullptr;
+  const base::DictionaryValue* files = nullptr;
+  return GetFilesNode(root, dir, &files) &&
+         files->GetDictionaryWithoutPathExpansion(name, out);
 }
 
 // Gets the node of "path" from "root".
-const base::Value::Dict* GetNodeFromPath(std::string path,
-                                         const base::Value::Dict& root) {
-  if (path.empty())
-    return &root;
+bool GetNodeFromPath(std::string path,
+                     const base::DictionaryValue* root,
+                     const base::DictionaryValue** out) {
+  if (path.empty()) {
+    *out = root;
+    return true;
+  }
 
-  const base::Value::Dict* dir = &root;
+  const base::DictionaryValue* dir = root;
   for (size_t delimiter_position = path.find_first_of(kSeparators);
        delimiter_position != std::string::npos;
        delimiter_position = path.find_first_of(kSeparators)) {
-    const base::Value::Dict* child =
-        GetChildNode(root, path.substr(0, delimiter_position), *dir);
-    if (!child)
-      return nullptr;
+    const base::DictionaryValue* child = nullptr;
+    if (!GetChildNode(root, path.substr(0, delimiter_position), dir, &child))
+      return false;
 
     dir = child;
     path.erase(0, delimiter_position + 1);
   }
 
-  return GetChildNode(root, path, *dir);
+  return GetChildNode(root, path, dir, out);
 }
 
 bool FillFileInfoWithNode(Archive::FileInfo* info,
                           uint32_t header_size,
                           bool load_integrity,
-                          const base::Value::Dict* node) {
-  if (std::optional<int> size = node->FindInt("size")) {
-    info->size = static_cast<uint32_t>(*size);
+                          const base::DictionaryValue* node) {
+  if (auto size = node->FindIntKey("size")) {
+    info->size = static_cast<uint32_t>(size.value());
   } else {
     return false;
   }
 
-  if (std::optional<bool> unpacked = node->FindBool("unpacked")) {
-    info->unpacked = *unpacked;
+  if (auto unpacked = node->FindBoolKey("unpacked")) {
+    info->unpacked = unpacked.value();
     if (info->unpacked) {
       return true;
     }
   }
 
-  const std::string* offset = node->FindString("offset");
+  auto* offset = node->FindStringKey("offset");
   if (offset &&
-      base::StringToUint64(std::string_view{*offset}, &info->offset)) {
+      base::StringToUint64(base::StringPiece(*offset), &info->offset)) {
     info->offset += header_size;
   } else {
     return false;
   }
 
-  if (std::optional<bool> executable = node->FindBool("executable")) {
-    info->executable = *executable;
+  if (auto executable = node->FindBoolKey("executable")) {
+    info->executable = executable.value();
   }
 
-#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)
+#if BUILDFLAG(IS_MAC)
   if (load_integrity &&
       electron::fuses::IsEmbeddedAsarIntegrityValidationEnabled()) {
-    if (const base::Value::Dict* integrity = node->FindDict("integrity")) {
-      const std::string* algorithm = integrity->FindString("algorithm");
-      const std::string* hash = integrity->FindString("hash");
-      std::optional<int> block_size = integrity->FindInt("blockSize");
-      const base::Value::List* blocks = integrity->FindList("blocks");
+    if (auto* integrity = node->FindDictKey("integrity")) {
+      auto* algorithm = integrity->FindStringKey("algorithm");
+      auto* hash = integrity->FindStringKey("hash");
+      auto block_size = integrity->FindIntKey("blockSize");
+      auto* blocks = integrity->FindListKey("blocks");
 
       if (algorithm && hash && block_size && block_size > 0 && blocks) {
         IntegrityPayload integrity_payload;
         integrity_payload.hash = *hash;
         integrity_payload.block_size =
             static_cast<uint32_t>(block_size.value());
-        for (auto& value : *blocks) {
-          if (const std::string* block = value.GetIfString()) {
+        for (auto& value : blocks->GetListDeprecated()) {
+          if (auto* block = value.GetIfString()) {
             integrity_payload.blocks.push_back(*block);
           } else {
             LOG(FATAL)
@@ -139,7 +146,7 @@ bool FillFileInfoWithNode(Archive::FileInfo* info,
           }
         }
         if (*algorithm == "SHA256") {
-          integrity_payload.algorithm = HashAlgorithm::kSHA256;
+          integrity_payload.algorithm = HashAlgorithm::SHA256;
           info->integrity = std::move(integrity_payload);
         }
       }
@@ -147,6 +154,7 @@ bool FillFileInfoWithNode(Archive::FileInfo* info,
 
     if (!info->integrity.has_value()) {
       LOG(FATAL) << "Failed to read integrity for file in ASAR archive";
+      return false;
     }
   }
 #endif
@@ -157,7 +165,7 @@ bool FillFileInfoWithNode(Archive::FileInfo* info,
 }  // namespace
 
 IntegrityPayload::IntegrityPayload()
-    : algorithm(HashAlgorithm::kNone), block_size(0) {}
+    : algorithm(HashAlgorithm::NONE), block_size(0) {}
 IntegrityPayload::~IntegrityPayload() = default;
 IntegrityPayload::IntegrityPayload(const IntegrityPayload& other) = default;
 
@@ -167,7 +175,7 @@ Archive::FileInfo::~FileInfo() = default;
 
 Archive::Archive(const base::FilePath& path)
     : initialized_(false), path_(path), file_(base::File::FILE_OK) {
-  electron::ScopedAllowBlockingForElectron allow_blocking;
+  base::ThreadRestrictions::ScopedAllowIO allow_io;
   file_.Initialize(path_, base::File::FLAG_OPEN | base::File::FLAG_READ);
 #if BUILDFLAG(IS_WIN)
   fd_ = _open_osfhandle(reinterpret_cast<intptr_t>(file_.GetPlatformFile()), 0);
@@ -184,7 +192,7 @@ Archive::~Archive() {
     file_.TakePlatformFile();
   }
 #endif
-  electron::ScopedAllowBlockingForElectron allow_blocking;
+  base::ThreadRestrictions::ScopedAllowIO allow_io;
   file_.Close();
 }
 
@@ -206,7 +214,7 @@ bool Archive::Init() {
 
   buf.resize(8);
   {
-    electron::ScopedAllowBlockingForElectron allow_blocking;
+    base::ThreadRestrictions::ScopedAllowIO allow_io;
     len = file_.ReadAtCurrentPos(buf.data(), buf.size());
   }
   if (len != static_cast<int>(buf.size())) {
@@ -215,7 +223,7 @@ bool Archive::Init() {
   }
 
   uint32_t size;
-  if (!base::PickleIterator(base::Pickle::WithData(base::as_byte_span(buf)))
+  if (!base::PickleIterator(base::Pickle(buf.data(), buf.size()))
            .ReadUInt32(&size)) {
     LOG(ERROR) << "Failed to parse header size from " << path_.value();
     return false;
@@ -223,7 +231,7 @@ bool Archive::Init() {
 
   buf.resize(size);
   {
-    electron::ScopedAllowBlockingForElectron allow_blocking;
+    base::ThreadRestrictions::ScopedAllowIO allow_io;
     len = file_.ReadAtCurrentPos(buf.data(), buf.size());
   }
   if (len != static_cast<int>(buf.size())) {
@@ -232,26 +240,27 @@ bool Archive::Init() {
   }
 
   std::string header;
-  if (!base::PickleIterator(base::Pickle::WithData(base::as_byte_span(buf)))
+  if (!base::PickleIterator(base::Pickle(buf.data(), buf.size()))
            .ReadString(&header)) {
     LOG(ERROR) << "Failed to parse header from " << path_.value();
     return false;
   }
 
-#if BUILDFLAG(IS_MAC) || BUILDFLAG(IS_WIN)
+#if BUILDFLAG(IS_MAC)
   // Validate header signature if required and possible
   if (electron::fuses::IsEmbeddedAsarIntegrityValidationEnabled() &&
       RelativePath().has_value()) {
-    std::optional<IntegrityPayload> integrity = HeaderIntegrity();
+    absl::optional<IntegrityPayload> integrity = HeaderIntegrity();
     if (!integrity.has_value()) {
       LOG(FATAL) << "Failed to get integrity for validatable asar archive: "
                  << RelativePath().value();
+      return false;
     }
 
     // Currently we only support the sha256 algorithm, we can add support for
     // more below ensure we read them in preference order from most secure to
     // least
-    if (integrity.value().algorithm != HashAlgorithm::kNone) {
+    if (integrity.value().algorithm != HashAlgorithm::NONE) {
       ValidateIntegrityOrDie(header.c_str(), header.length(),
                              integrity.value());
     } else {
@@ -263,24 +272,25 @@ bool Archive::Init() {
   }
 #endif
 
-  std::optional<base::Value> value = base::JSONReader::Read(header);
+  absl::optional<base::Value> value = base::JSONReader::Read(header);
   if (!value || !value->is_dict()) {
     LOG(ERROR) << "Failed to parse header";
     return false;
   }
 
   header_size_ = 8 + size;
-  header_ = std::move(*value).TakeDict();
+  header_ = base::DictionaryValue::From(
+      base::Value::ToUniquePtrValue(std::move(*value)));
   return true;
 }
 
-#if !BUILDFLAG(IS_MAC) && !BUILDFLAG(IS_WIN)
-std::optional<IntegrityPayload> Archive::HeaderIntegrity() const {
-  return std::nullopt;
+#if !BUILDFLAG(IS_MAC)
+absl::optional<IntegrityPayload> Archive::HeaderIntegrity() const {
+  return absl::nullopt;
 }
 
-std::optional<base::FilePath> Archive::RelativePath() const {
-  return std::nullopt;
+absl::optional<base::FilePath> Archive::RelativePath() const {
+  return absl::nullopt;
 }
 #endif
 
@@ -288,14 +298,13 @@ bool Archive::GetFileInfo(const base::FilePath& path, FileInfo* info) const {
   if (!header_)
     return false;
 
-  const base::Value::Dict* node =
-      GetNodeFromPath(path.AsUTF8Unsafe(), *header_);
-  if (!node)
+  const base::DictionaryValue* node;
+  if (!GetNodeFromPath(path.AsUTF8Unsafe(), header_.get(), &node))
     return false;
 
-  const std::string* link = node->FindString("link");
-  if (link)
-    return GetFileInfo(base::FilePath::FromUTF8Unsafe(*link), info);
+  std::string link;
+  if (node->GetString("link", &link))
+    return GetFileInfo(base::FilePath::FromUTF8Unsafe(link), info);
 
   return FillFileInfoWithNode(info, header_size_, header_validated_, node);
 }
@@ -304,18 +313,19 @@ bool Archive::Stat(const base::FilePath& path, Stats* stats) const {
   if (!header_)
     return false;
 
-  const base::Value::Dict* node =
-      GetNodeFromPath(path.AsUTF8Unsafe(), *header_);
-  if (!node)
+  const base::DictionaryValue* node;
+  if (!GetNodeFromPath(path.AsUTF8Unsafe(), header_.get(), &node))
     return false;
 
-  if (node->Find("link")) {
-    stats->type = FileType::kLink;
+  if (node->FindKey("link")) {
+    stats->is_file = false;
+    stats->is_link = true;
     return true;
   }
 
-  if (node->Find("files")) {
-    stats->type = FileType::kDirectory;
+  if (node->FindKey("files")) {
+    stats->is_file = false;
+    stats->is_directory = true;
     return true;
   }
 
@@ -327,17 +337,19 @@ bool Archive::Readdir(const base::FilePath& path,
   if (!header_)
     return false;
 
-  const base::Value::Dict* node =
-      GetNodeFromPath(path.AsUTF8Unsafe(), *header_);
-  if (!node)
+  const base::DictionaryValue* node;
+  if (!GetNodeFromPath(path.AsUTF8Unsafe(), header_.get(), &node))
     return false;
 
-  const base::Value::Dict* files_node = GetFilesNode(*header_, *node);
-  if (!files_node)
+  const base::DictionaryValue* files_node;
+  if (!GetFilesNode(header_.get(), node, &files_node))
     return false;
 
-  for (const auto iter : *files_node)
-    files->push_back(base::FilePath::FromUTF8Unsafe(iter.first));
+  base::DictionaryValue::Iterator iter(*files_node);
+  while (!iter.IsAtEnd()) {
+    files->push_back(base::FilePath::FromUTF8Unsafe(iter.key()));
+    iter.Advance();
+  }
   return true;
 }
 
@@ -346,14 +358,13 @@ bool Archive::Realpath(const base::FilePath& path,
   if (!header_)
     return false;
 
-  const base::Value::Dict* node =
-      GetNodeFromPath(path.AsUTF8Unsafe(), *header_);
-  if (!node)
+  const base::DictionaryValue* node;
+  if (!GetNodeFromPath(path.AsUTF8Unsafe(), header_.get(), &node))
     return false;
 
-  const std::string* link = node->FindString("link");
-  if (link) {
-    *realpath = base::FilePath::FromUTF8Unsafe(*link);
+  std::string link;
+  if (node->GetString("link", &link)) {
+    *realpath = base::FilePath::FromUTF8Unsafe(link);
     return true;
   }
 

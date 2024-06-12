@@ -4,7 +4,6 @@
 
 #include "shell/browser/extensions/electron_extension_system_factory.h"
 
-#include "base/no_destructor.h"
 #include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "extensions/browser/extension_prefs_factory.h"
 #include "extensions/browser/extension_registry_factory.h"
@@ -22,8 +21,7 @@ ExtensionSystem* ElectronExtensionSystemFactory::GetForBrowserContext(
 
 // static
 ElectronExtensionSystemFactory* ElectronExtensionSystemFactory::GetInstance() {
-  static base::NoDestructor<ElectronExtensionSystemFactory> instance;
-  return instance.get();
+  return base::Singleton<ElectronExtensionSystemFactory>::get();
 }
 
 ElectronExtensionSystemFactory::ElectronExtensionSystemFactory()

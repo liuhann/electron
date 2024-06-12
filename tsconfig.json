@@ -3,7 +3,8 @@
     "module": "commonjs",
     "target": "es2020",
     "lib": [
-      "es2022",
+      "es2019",
+      "esnext.weakref",
       "dom",
       "dom.iterable"
     ],
@@ -14,7 +15,6 @@
     "allowJs": true,
     "noUnusedLocals": true,
     "outDir": "ts-gen",
-    "typeRoots" : ["./node_modules/@types"],
     "paths": {
       "@electron/internal/*": ["lib/*"]
     }

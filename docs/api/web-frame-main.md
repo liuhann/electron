@@ -8,7 +8,7 @@ The `webFrameMain` module can be used to lookup frames across existing
 [`WebContents`](web-contents.md) instances. Navigation events are the common
 use case.
 
-```js
+```javascript
 const { BrowserWindow, webFrameMain } = require('electron')
 
 const win = new BrowserWindow({ width: 800, height: 1500 })
@@ -29,7 +29,7 @@ win.webContents.on(
 You can also access frames of existing pages by using the `mainFrame` property
 of [`WebContents`](web-contents.md).
 
-```js
+```javascript
 const { BrowserWindow } = require('electron')
 
 async function main () {
@@ -103,9 +103,10 @@ Returns `boolean` - Whether the reload was initiated successfully. Only results 
 * `...args` any[]
 
 Send an asynchronous message to the renderer process via `channel`, along with
-arguments. Arguments will be serialized with the [Structured Clone Algorithm][SCA],
-just like [`postMessage`][], so prototype chains will not be included.
-Sending Functions, Promises, Symbols, WeakMaps, or WeakSets will throw an exception.
+arguments. Arguments will be serialized with the [Structured Clone
+Algorithm][SCA], just like [`postMessage`][], so prototype chains will not be
+included. Sending Functions, Promises, Symbols, WeakMaps, or WeakSets will
+throw an exception.
 
 The renderer process can handle the message by listening to `channel` with the
 [`ipcRenderer`](ipc-renderer.md) module.
@@ -127,9 +128,8 @@ For example:
 
 ```js
 // Main process
-const win = new BrowserWindow()
 const { port1, port2 } = new MessageChannelMain()
-win.webContents.mainFrame.postMessage('port', { message: 'hello' }, [port1])
+webContents.mainFrame.postMessage('port', { message: 'hello' }, [port1])
 
 // Renderer process
 ipcRenderer.on('port', (e, msg) => {
@@ -139,31 +139,6 @@ ipcRenderer.on('port', (e, msg) => {
 ```
 
 ### Instance Properties
-
-#### `frame.ipc` _Readonly_
-
-An [`IpcMain`](ipc-main.md) instance scoped to the frame.
-
-IPC messages sent with `ipcRenderer.send`, `ipcRenderer.sendSync` or
-`ipcRenderer.postMessage` will be delivered in the following order:
-
-1. `contents.on('ipc-message')`
-2. `contents.mainFrame.on(channel)`
-3. `contents.ipc.on(channel)`
-4. `ipcMain.on(channel)`
-
-Handlers registered with `invoke` will be checked in the following order. The
-first one that is defined will be called, the rest will be ignored.
-
-1. `contents.mainFrame.handle(channel)`
-2. `contents.handle(channel)`
-3. `ipcMain.handle(channel)`
-
-In most cases, only the main frame of a WebContents can send or receive IPC
-messages. However, if the `nodeIntegrationInSubFrames` option is enabled, it is
-possible for child frames to send and receive IPC messages also. The
-[`WebContents.ipc`](web-contents.md#contentsipc-readonly) interface may be more
-convenient when `nodeIntegrationInSubFrames` is not enabled.
 
 #### `frame.url` _Readonly_
 
@@ -233,4 +208,3 @@ See also how the [Page Visibility API](browser-window.md#page-visibility) is aff
 
 [SCA]: https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Structured_clone_algorithm
 [`postMessage`]: https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage
-[`MessagePortMain`]: message-port-main.md

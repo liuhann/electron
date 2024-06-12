@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from __future__ import print_function
 import json
 import os
 import sys
@@ -32,8 +33,9 @@ def get_content(retry_count = 5):
       headers={"Authorization" : authToken}
     )
 
-    with urlopen(request) as resp:
-      proposed_content = resp.read()
+    proposed_content = urlopen(
+      request
+    ).read()
 
     if is_json(proposed_content):
       return proposed_content

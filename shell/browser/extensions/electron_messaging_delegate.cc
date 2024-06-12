@@ -7,16 +7,14 @@
 #include <memory>
 #include <utility>
 
-#include "base/functional/callback.h"
+#include "base/callback.h"
 #include "base/logging.h"
-#include "base/values.h"
 #include "build/build_config.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
-#include "electron/shell/common/extensions/api/tabs.h"
 #include "extensions/browser/api/messaging/extension_message_port.h"
 #include "extensions/browser/api/messaging/native_message_host.h"
 #include "extensions/browser/extension_api_frame_id_map.h"
@@ -41,20 +39,25 @@ ElectronMessagingDelegate::IsNativeMessagingHostAllowed(
   return PolicyPermission::DISALLOW;
 }
 
-std::optional<base::Value::Dict> ElectronMessagingDelegate::MaybeGetTabInfo(
-    content::WebContents* web_contents) {
+std::unique_ptr<base::DictionaryValue>
+ElectronMessagingDelegate::MaybeGetTabInfo(content::WebContents* web_contents) {
   if (web_contents) {
     auto* api_contents = electron::api::WebContents::From(web_contents);
     if (api_contents) {
-      api::tabs::Tab tab;
-      tab.id = api_contents->ID();
-      tab.url = api_contents->GetURL().spec();
-      tab.title = base::UTF16ToUTF8(api_contents->GetTitle());
-      tab.audible = api_contents->IsCurrentlyAudible();
-      return tab.ToValue();
+      auto tab = std::make_unique<base::DictionaryValue>();
+      tab->SetWithoutPathExpansion(
+          "id", std::make_unique<base::Value>(api_contents->ID()));
+      tab->SetWithoutPathExpansion(
+          "url", std::make_unique<base::Value>(api_contents->GetURL().spec()));
+      tab->SetWithoutPathExpansion(
+          "title", std::make_unique<base::Value>(api_contents->GetTitle()));
+      tab->SetWithoutPathExpansion(
+          "audible",
+          std::make_unique<base::Value>(api_contents->IsCurrentlyAudible()));
+      return tab;
     }
   }
-  return std::nullopt;
+  return nullptr;
 }
 
 content::WebContents* ElectronMessagingDelegate::GetWebContentsByTabId(
@@ -81,7 +84,7 @@ std::unique_ptr<MessagePort> ElectronMessagingDelegate::CreateReceiverForTab(
   content::RenderFrameHost* receiver_rfh = nullptr;
   if (include_child_frames) {
     // The target is the active outermost main frame of the WebContents.
-    receiver_rfh = receiver_contents->GetPrimaryMainFrame();
+    receiver_rfh = receiver_contents->GetMainFrame();
   } else if (!receiver_document_id.empty()) {
     ExtensionApiFrameIdMap::DocumentId document_id =
         ExtensionApiFrameIdMap::DocumentIdFromString(receiver_document_id);

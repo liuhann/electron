@@ -1,4 +1,5 @@
-const fs = require('node:fs');
+const fs = require('fs');
+const path = require('path');
 const semver = require('semver');
 
 const outputPath = process.argv[2];

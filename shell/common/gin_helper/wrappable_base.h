@@ -5,7 +5,6 @@
 #ifndef ELECTRON_SHELL_COMMON_GIN_HELPER_WRAPPABLE_BASE_H_
 #define ELECTRON_SHELL_COMMON_GIN_HELPER_WRAPPABLE_BASE_H_
 
-#include "base/memory/raw_ptr.h"
 #include "v8/include/v8.h"
 
 namespace gin {
@@ -63,7 +62,7 @@ class WrappableBase {
   static void SecondWeakCallback(
       const v8::WeakCallbackInfo<WrappableBase>& data);
 
-  raw_ptr<v8::Isolate> isolate_ = nullptr;
+  v8::Isolate* isolate_ = nullptr;
 };
 
 }  // namespace gin_helper

@@ -1,5 +1,5 @@
-const cp = require('node:child_process');
-const fs = require('node:fs');
+const cp = require('child_process');
+const fs = require('fs');
 
 const checkPath = process.argv[2];
 const command = process.argv.slice(3);
@@ -10,8 +10,7 @@ if (fs.existsSync(checkPath)) {
     command.slice(1),
     {
       stdio: 'inherit',
-      cwd: checkPath,
-      shell: process.platform === 'win32'
+      cwd: checkPath
     }
   );
   child.on('exit', code => process.exit(code));

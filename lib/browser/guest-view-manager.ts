@@ -8,18 +8,26 @@ import { IPC_MESSAGES } from '@electron/internal/common/ipc-messages';
 
 interface GuestInstance {
   elementInstanceId: number;
-  visibilityState?: DocumentVisibilityState;
+  visibilityState?: VisibilityState;
   embedder: Electron.WebContents;
   guest: Electron.WebContents;
 }
 
 const webViewManager = process._linkedBinding('electron_browser_web_view_manager');
-const netBinding = process._linkedBinding('electron_common_net');
+const eventBinding = process._linkedBinding('electron_browser_event');
+const netBinding = process._linkedBinding('electron_browser_net');
 
 const supportedWebViewEvents = Object.keys(webViewEvents);
 
 const guestInstances = new Map<number, GuestInstance>();
 const embedderElementsMap = new Map<string, number>();
+
+function sanitizeOptionsForGuest (options: Record<string, any>) {
+  const ret = { ...options };
+  // WebContents values can't be sent over IPC.
+  delete ret.webContents;
+  return ret;
+}
 
 function makeWebPreferences (embedder: Electron.WebContents, params: Record<string, any>) {
   // parse the 'webpreferences' attribute string, if set
@@ -30,8 +38,8 @@ function makeWebPreferences (embedder: Electron.WebContents, params: Record<stri
       : null;
 
   const webPreferences: Electron.WebPreferences = {
-    nodeIntegration: params.nodeintegration ?? false,
-    nodeIntegrationInSubFrames: params.nodeintegrationinsubframes ?? false,
+    nodeIntegration: params.nodeintegration != null ? params.nodeintegration : false,
+    nodeIntegrationInSubFrames: params.nodeintegrationinsubframes != null ? params.nodeintegrationinsubframes : false,
     plugins: params.plugins,
     zoomFactor: embedder.zoomFactor,
     disablePopups: !params.allowpopups,
@@ -81,13 +89,7 @@ function makeLoadURLOptions (params: Record<string, any>) {
 // Create a new guest instance.
 const createGuest = function (embedder: Electron.WebContents, embedderFrameId: number, elementInstanceId: number, params: Record<string, any>) {
   const webPreferences = makeWebPreferences(embedder, params);
-  const event = {
-    sender: embedder,
-    preventDefault () {
-      this.defaultPrevented = true;
-    },
-    defaultPrevented: false
-  };
+  const event = eventBinding.createWithSender(embedder);
 
   const { instanceId } = params;
 
@@ -96,6 +98,7 @@ const createGuest = function (embedder: Electron.WebContents, embedderFrameId: n
     return -1;
   }
 
+  // eslint-disable-next-line no-undef
   const guest = (webContents as typeof ElectronInternal.WebContents).create({
     ...webPreferences,
     type: 'webview',
@@ -140,9 +143,9 @@ const createGuest = function (embedder: Electron.WebContents, embedderFrameId: n
 
   const makeProps = (eventKey: string, args: any[]) => {
     const props: Record<string, any> = {};
-    for (const [index, prop] of webViewEvents[eventKey].entries()) {
+    webViewEvents[eventKey].forEach((prop, index) => {
       props[prop] = args[index];
-    }
+    });
     return props;
   };
 
@@ -153,22 +156,21 @@ const createGuest = function (embedder: Electron.WebContents, embedderFrameId: n
     });
   }
 
+  guest.on('new-window', function (event, url, frameName, disposition, options) {
+    sendToEmbedder(IPC_MESSAGES.GUEST_VIEW_INTERNAL_DISPATCH_EVENT, 'new-window', {
+      url,
+      frameName,
+      disposition,
+      options: sanitizeOptionsForGuest(options)
+    });
+  });
+
   // Dispatch guest's IPC messages to embedder.
   guest.on('ipc-message-host' as any, function (event: Electron.IpcMainEvent, channel: string, args: any[]) {
     sendToEmbedder(IPC_MESSAGES.GUEST_VIEW_INTERNAL_DISPATCH_EVENT, 'ipc-message', {
       frameId: [event.processId, event.frameId],
       channel,
       args
-    });
-  });
-
-  // Dispatch guest's frame navigation event to embedder.
-  guest.on('will-frame-navigate', function (event: Electron.WebContentsWillFrameNavigateEventParams) {
-    sendToEmbedder(IPC_MESSAGES.GUEST_VIEW_INTERNAL_DISPATCH_EVENT, 'will-frame-navigate', {
-      url: event.url,
-      isMainFrame: event.isMainFrame,
-      frameProcessId: event.frame.processId,
-      frameRoutingId: event.frame.routingId
     });
   });
 
@@ -229,7 +231,7 @@ const watchEmbedder = function (embedder: Electron.WebContents) {
   watchedEmbedders.add(embedder);
 
   // Forward embedder window visibility change events to guest
-  const onVisibilityChange = function (visibilityState: DocumentVisibilityState) {
+  const onVisibilityChange = function (visibilityState: VisibilityState) {
     for (const guestInstance of guestInstances.values()) {
       guestInstance.visibilityState = visibilityState;
       if (guestInstance.embedder === embedder) {

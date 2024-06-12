@@ -30,7 +30,6 @@ extern const char kMinimizable[];
 extern const char kMaximizable[];
 extern const char kFullScreenable[];
 extern const char kClosable[];
-extern const char kHiddenInMissionControl[];
 extern const char kFullscreen[];
 extern const char kSkipTaskbar[];
 extern const char kKiosk[];
@@ -39,6 +38,7 @@ extern const char kAlwaysOnTop[];
 extern const char kAcceptFirstMouse[];
 extern const char kUseContentSize[];
 extern const char kZoomToPageWidth[];
+extern const char kFullscreenWindowTitle[];
 extern const char kTitleBarStyle[];
 extern const char kTabbingIdentifier[];
 extern const char kAutoHideMenuBar[];
@@ -54,7 +54,6 @@ extern const char kOpacity[];
 extern const char kFocusable[];
 extern const char kWebPreferences[];
 extern const char kVibrancyType[];
-extern const char kBackgroundMaterial[];
 extern const char kVisualEffectState[];
 extern const char kTrafficLightPosition[];
 extern const char kRoundedCorners[];
@@ -66,6 +65,7 @@ extern const char kOverlayHeight[];
 // WebPreferences.
 extern const char kZoomFactor[];
 extern const char kPreloadScript[];
+extern const char kPreloadScripts[];
 extern const char kNodeIntegration[];
 extern const char kContextIsolation[];
 extern const char kExperimentalFeatures[];
@@ -84,9 +84,11 @@ extern const char kNodeIntegrationInSubFrames[];
 extern const char kDisableHtmlFullscreenWindowResize[];
 extern const char kJavaScript[];
 extern const char kImages[];
+extern const char kImageAnimationPolicy[];
 extern const char kTextAreasAreResizable[];
 extern const char kWebGL[];
 extern const char kNavigateOnDragDrop[];
+extern const char kEnableWebSQL[];
 extern const char kEnablePreferredSizeMode[];
 
 extern const char kHiddenPage[];
@@ -112,7 +114,6 @@ extern const char kBypassCSPSchemes[];
 extern const char kFetchSchemes[];
 extern const char kCORSSchemes[];
 extern const char kStreamingSchemes[];
-extern const char kCodeCacheSchemes[];
 extern const char kAppUserModelId[];
 extern const char kAppPath[];
 
@@ -128,6 +129,10 @@ extern const char kAuthServerWhitelist[];
 extern const char kAuthNegotiateDelegateWhitelist[];
 extern const char kEnableAuthNegotiatePort[];
 extern const char kDisableNTLMv2[];
+
+extern const char kGlobalCrashKeys[];
+
+extern const char kEnableWebSQL[];
 }  // namespace switches
 
 }  // namespace electron

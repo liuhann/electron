@@ -4,8 +4,8 @@
 
 Process: [Main](../glossary.md#main-process)
 
-```js
-const { app, netLog } = require('electron')
+```javascript
+const { netLog } = require('electron')
 
 app.whenReady().then(async () => {
   await netLog.startLogging('/path/to/net-log')

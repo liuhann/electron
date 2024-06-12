@@ -7,9 +7,7 @@
 
 #include <map>
 #include <memory>
-#include <optional>
 #include <string>
-#include <string_view>
 #include <vector>
 
 #include "content/public/browser/browser_task_traits.h"
@@ -21,12 +19,14 @@
 #include "shell/common/gin_helper/error_thrower.h"
 #include "shell/common/gin_helper/trackable_object.h"
 
-namespace electron::api {
+namespace electron {
+
+namespace api {
 
 class View;
 
 class BaseWindow : public gin_helper::TrackableObject<BaseWindow>,
-                   private NativeWindowObserver {
+                   public NativeWindowObserver {
  public:
   static gin_helper::WrappableBase* New(gin_helper::Arguments* args);
 
@@ -69,6 +69,8 @@ class BaseWindow : public gin_helper::TrackableObject<BaseWindow>,
                         bool* prevent_default) override;
   void OnWindowMove() override;
   void OnWindowMoved() override;
+  void OnWindowScrollTouchBegin() override;
+  void OnWindowScrollTouchEnd() override;
   void OnWindowSwipe(const std::string& direction) override;
   void OnWindowRotateGesture(float rotation) override;
   void OnWindowSheetBegin() override;
@@ -80,7 +82,7 @@ class BaseWindow : public gin_helper::TrackableObject<BaseWindow>,
   void OnWindowAlwaysOnTopChanged() override;
   void OnExecuteAppCommand(const std::string& command_name) override;
   void OnTouchBarItemResult(const std::string& item_id,
-                            const base::Value::Dict& details) override;
+                            const base::DictionaryValue& details) override;
   void OnNewWindowForTab() override;
   void OnSystemContextMenu(int x, int y, bool* prevent_default) override;
 #if BUILDFLAG(IS_WIN)
@@ -93,107 +95,109 @@ class BaseWindow : public gin_helper::TrackableObject<BaseWindow>,
   virtual void CloseImmediately();
   virtual void Focus();
   virtual void Blur();
-  bool IsFocused() const;
+  bool IsFocused();
   void Show();
   void ShowInactive();
   void Hide();
-  bool IsVisible() const;
-  bool IsEnabled() const;
+  bool IsVisible();
+  bool IsEnabled();
   void SetEnabled(bool enable);
   void Maximize();
   void Unmaximize();
-  bool IsMaximized() const;
+  bool IsMaximized();
   void Minimize();
   void Restore();
-  bool IsMinimized() const;
+  bool IsMinimized();
   void SetFullScreen(bool fullscreen);
-  bool IsFullscreen() const;
+  bool IsFullscreen();
   void SetBounds(const gfx::Rect& bounds, gin_helper::Arguments* args);
-  gfx::Rect GetBounds() const;
+  gfx::Rect GetBounds();
   void SetSize(int width, int height, gin_helper::Arguments* args);
-  std::vector<int> GetSize() const;
+  std::vector<int> GetSize();
   void SetContentSize(int width, int height, gin_helper::Arguments* args);
-  std::vector<int> GetContentSize() const;
+  std::vector<int> GetContentSize();
   void SetContentBounds(const gfx::Rect& bounds, gin_helper::Arguments* args);
-  gfx::Rect GetContentBounds() const;
-  bool IsNormal() const;
-  gfx::Rect GetNormalBounds() const;
+  gfx::Rect GetContentBounds();
+  bool IsNormal();
+  gfx::Rect GetNormalBounds();
   void SetMinimumSize(int width, int height);
-  std::vector<int> GetMinimumSize() const;
+  std::vector<int> GetMinimumSize();
   void SetMaximumSize(int width, int height);
-  std::vector<int> GetMaximumSize() const;
+  std::vector<int> GetMaximumSize();
   void SetSheetOffset(double offsetY, gin_helper::Arguments* args);
   void SetResizable(bool resizable);
-  bool IsResizable() const;
+  bool IsResizable();
   void SetMovable(bool movable);
   void MoveAbove(const std::string& sourceId, gin_helper::Arguments* args);
   void MoveTop();
-  bool IsMovable() const;
+  bool IsMovable();
   void SetMinimizable(bool minimizable);
-  bool IsMinimizable() const;
+  bool IsMinimizable();
   void SetMaximizable(bool maximizable);
-  bool IsMaximizable() const;
+  bool IsMaximizable();
   void SetFullScreenable(bool fullscreenable);
-  bool IsFullScreenable() const;
+  bool IsFullScreenable();
   void SetClosable(bool closable);
-  bool IsClosable() const;
+  bool IsClosable();
   void SetAlwaysOnTop(bool top, gin_helper::Arguments* args);
-  bool IsAlwaysOnTop() const;
+  bool IsAlwaysOnTop();
   void Center();
   void SetPosition(int x, int y, gin_helper::Arguments* args);
-  std::vector<int> GetPosition() const;
+  std::vector<int> GetPosition();
   void SetTitle(const std::string& title);
-  std::string GetTitle() const;
+  std::string GetTitle();
   void SetAccessibleTitle(const std::string& title);
-  std::string GetAccessibleTitle() const;
+  std::string GetAccessibleTitle();
   void FlashFrame(bool flash);
   void SetSkipTaskbar(bool skip);
   void SetExcludedFromShownWindowsMenu(bool excluded);
-  bool IsExcludedFromShownWindowsMenu() const;
+  bool IsExcludedFromShownWindowsMenu();
   void SetSimpleFullScreen(bool simple_fullscreen);
-  bool IsSimpleFullScreen() const;
+  bool IsSimpleFullScreen();
   void SetKiosk(bool kiosk);
-  bool IsKiosk() const;
+  bool IsKiosk();
   bool IsTabletMode() const;
   virtual void SetBackgroundColor(const std::string& color_name);
-  std::string GetBackgroundColor(gin_helper::Arguments* args) const;
-  void InvalidateShadow();
+  std::string GetBackgroundColor(gin_helper::Arguments* args);
   void SetHasShadow(bool has_shadow);
-  bool HasShadow() const;
+  bool HasShadow();
   void SetOpacity(const double opacity);
-  double GetOpacity() const;
+  double GetOpacity();
   void SetShape(const std::vector<gfx::Rect>& rects);
   void SetRepresentedFilename(const std::string& filename);
-  std::string GetRepresentedFilename() const;
+  std::string GetRepresentedFilename();
   void SetDocumentEdited(bool edited);
-  bool IsDocumentEdited() const;
+  bool IsDocumentEdited();
   void SetIgnoreMouseEvents(bool ignore, gin_helper::Arguments* args);
   void SetContentProtection(bool enable);
   void SetFocusable(bool focusable);
-  bool IsFocusable() const;
+  bool IsFocusable();
   void SetMenu(v8::Isolate* isolate, v8::Local<v8::Value> menu);
   void RemoveMenu();
   void SetParentWindow(v8::Local<v8::Value> value, gin_helper::Arguments* args);
+  virtual void SetBrowserView(v8::Local<v8::Value> value);
+  virtual void AddBrowserView(v8::Local<v8::Value> value);
+  virtual void RemoveBrowserView(v8::Local<v8::Value> value);
+  virtual void SetTopBrowserView(v8::Local<v8::Value> value,
+                                 gin_helper::Arguments* args);
+  virtual std::vector<v8::Local<v8::Value>> GetBrowserViews() const;
+  virtual void ResetBrowserViews();
   std::string GetMediaSourceId() const;
   v8::Local<v8::Value> GetNativeWindowHandle();
   void SetProgressBar(double progress, gin_helper::Arguments* args);
   void SetOverlayIcon(const gfx::Image& overlay,
                       const std::string& description);
   void SetVisibleOnAllWorkspaces(bool visible, gin_helper::Arguments* args);
-  bool IsVisibleOnAllWorkspaces() const;
+  bool IsVisibleOnAllWorkspaces();
   void SetAutoHideCursor(bool auto_hide);
   virtual void SetVibrancy(v8::Isolate* isolate, v8::Local<v8::Value> value);
-  void SetBackgroundMaterial(const std::string& vibrancy);
 
 #if BUILDFLAG(IS_MAC)
-  std::string GetAlwaysOnTopLevel() const;
+  std::string GetAlwaysOnTopLevel();
   void SetWindowButtonVisibility(bool visible);
   bool GetWindowButtonVisibility() const;
-  void SetWindowButtonPosition(std::optional<gfx::Point> position);
-  std::optional<gfx::Point> GetWindowButtonPosition() const;
-
-  bool IsHiddenInMissionControl();
-  void SetHiddenInMissionControl(bool hidden);
+  void SetTrafficLightPosition(const gfx::Point& position);
+  gfx::Point GetTrafficLightPosition() const;
 #endif
 
   void SetTouchBar(std::vector<gin_helper::PersistentDictionary> items);
@@ -201,16 +205,14 @@ class BaseWindow : public gin_helper::TrackableObject<BaseWindow>,
   void SetEscapeTouchBarItem(gin_helper::PersistentDictionary item);
   void SelectPreviousTab();
   void SelectNextTab();
-  void ShowAllTabs();
   void MergeAllWindows();
   void MoveTabToNewWindow();
   void ToggleTabBar();
   void AddTabbedWindow(NativeWindow* window, gin_helper::Arguments* args);
-  v8::Local<v8::Value> GetTabbingIdentifier();
   void SetAutoHideMenuBar(bool auto_hide);
-  bool IsMenuBarAutoHide() const;
+  bool IsMenuBarAutoHide();
   void SetMenuBarVisibility(bool visible);
-  bool IsMenuBarVisible() const;
+  bool IsMenuBarVisible();
   void SetAspectRatio(double aspect_ratio, gin_helper::Arguments* args);
   void PreviewFile(const std::string& path, gin_helper::Arguments* args);
   void CloseFilePreview();
@@ -220,6 +222,7 @@ class BaseWindow : public gin_helper::TrackableObject<BaseWindow>,
   v8::Local<v8::Value> GetContentView() const;
   v8::Local<v8::Value> GetParentWindow() const;
   std::vector<v8::Local<v8::Object>> GetChildWindows() const;
+  v8::Local<v8::Value> GetBrowserView(gin_helper::Arguments* args) const;
   bool IsModal() const;
 
   // Extra APIs added in JS.
@@ -241,18 +244,19 @@ class BaseWindow : public gin_helper::TrackableObject<BaseWindow>,
   bool SetThumbnailClip(const gfx::Rect& region);
   bool SetThumbnailToolTip(const std::string& tooltip);
   void SetAppDetails(const gin_helper::Dictionary& options);
-  void SetTitleBarOverlay(const gin_helper::Dictionary& options,
-                          gin_helper::Arguments* args);
 #endif
   int32_t GetID() const;
 
   // Helpers.
 
+  // Remove BrowserView.
+  void ResetBrowserView();
+
   // Remove this window from parent window's |child_windows_|.
   void RemoveFromParentChildWindows();
 
   template <typename... Args>
-  void EmitEventSoon(std::string_view eventName) {
+  void EmitEventSoon(base::StringPiece eventName) {
     content::GetUIThreadTaskRunner({})->PostTask(
         FROM_HERE,
         base::BindOnce(base::IgnoreResult(&BaseWindow::Emit<Args...>),
@@ -265,6 +269,7 @@ class BaseWindow : public gin_helper::TrackableObject<BaseWindow>,
 #endif
 
   v8::Global<v8::Value> content_view_;
+  std::map<int32_t, v8::Global<v8::Value>> browser_views_;
   v8::Global<v8::Value> menu_;
   v8::Global<v8::Value> parent_window_;
   KeyWeakMap<int> child_windows_;
@@ -277,6 +282,8 @@ class BaseWindow : public gin_helper::TrackableObject<BaseWindow>,
   base::WeakPtrFactory<BaseWindow> weak_factory_{this};
 };
 
-}  // namespace electron::api
+}  // namespace api
+
+}  // namespace electron
 
 #endif  // ELECTRON_SHELL_BROWSER_API_ELECTRON_API_BASE_WINDOW_H_

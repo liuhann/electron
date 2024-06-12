@@ -1,7 +1,6 @@
-import type * as webViewElementModule from '@electron/internal/renderer/web-view/web-view-element';
-import type { WebViewImplHooks } from '@electron/internal/renderer/web-view/web-view-impl';
+/* global isolatedApi */
 
-declare const isolatedApi: WebViewImplHooks;
+import type * as webViewElementModule from '@electron/internal/renderer/web-view/web-view-element';
 
 if (isolatedApi.guestViewInternal) {
   // Must setup the WebView element in main world.

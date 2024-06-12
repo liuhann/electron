@@ -10,7 +10,6 @@
 #include <vector>
 
 #include "base/files/file_path.h"
-#include "base/memory/raw_ptr_exclusion.h"
 #include "shell/common/gin_helper/dictionary.h"
 #include "shell/common/gin_helper/promise.h"
 
@@ -45,7 +44,7 @@ enum SaveFileDialogProperty {
 };
 
 struct DialogSettings {
-  RAW_PTR_EXCLUSION electron::NativeWindow* parent_window = nullptr;
+  electron::NativeWindow* parent_window = nullptr;
   std::string title;
   std::string message;
   std::string button_label;

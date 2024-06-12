@@ -17,7 +17,6 @@
 #if BUILDFLAG(IS_WIN)
 #include "base/win/scoped_com_initializer.h"
 #include "base/win/shortcut.h"
-#include "shell/common/thread_restrictions.h"
 
 namespace gin {
 
@@ -51,7 +50,7 @@ void OnOpenFinished(gin_helper::Promise<void> promise,
   if (error.empty())
     promise.Resolve();
   else
-    promise.RejectWithErrorMessage(error);
+    promise.RejectWithErrorMessage(error.c_str());
 }
 
 v8::Local<v8::Promise> OpenExternal(const GURL& url, gin::Arguments* args) {
@@ -59,11 +58,12 @@ v8::Local<v8::Promise> OpenExternal(const GURL& url, gin::Arguments* args) {
   v8::Local<v8::Promise> handle = promise.GetHandle();
 
   platform_util::OpenExternalOptions options;
-  gin_helper::Dictionary obj;
-  if (args->GetNext(&obj)) {
-    obj.Get("activate", &options.activate);
-    obj.Get("workingDirectory", &options.working_dir);
-    obj.Get("logUsage", &options.log_usage);
+  if (args->Length() >= 2) {
+    gin::Dictionary obj(nullptr);
+    if (args->GetNext(&obj)) {
+      obj.Get("activate", &options.activate);
+      obj.Get("workingDirectory", &options.working_dir);
+    }
   }
 
   platform_util::OpenExternal(
@@ -105,13 +105,12 @@ v8::Local<v8::Promise> TrashItem(v8::Isolate* isolate,
 }
 
 #if BUILDFLAG(IS_WIN)
-
 bool WriteShortcutLink(const base::FilePath& shortcut_path,
                        gin_helper::Arguments* args) {
   base::win::ShortcutOperation operation =
       base::win::ShortcutOperation::kCreateAlways;
   args->GetNext(&operation);
-  auto options = gin::Dictionary::CreateEmpty(args->isolate());
+  gin::Dictionary options = gin::Dictionary::CreateEmpty(args->isolate());
   if (!args->GetNext(&options)) {
     args->ThrowError();
     return false;
@@ -137,7 +136,6 @@ bool WriteShortcutLink(const base::FilePath& shortcut_path,
   if (options.Get("toastActivatorClsid", &toastActivatorClsid))
     properties.set_toast_activator_clsid(toastActivatorClsid);
 
-  electron::ScopedAllowBlockingForElectron allow_blocking;
   base::win::ScopedCOMInitializer com_initializer;
   return base::win::CreateOrUpdateShortcutLink(shortcut_path, properties,
                                                operation);
@@ -146,8 +144,7 @@ bool WriteShortcutLink(const base::FilePath& shortcut_path,
 v8::Local<v8::Value> ReadShortcutLink(gin_helper::ErrorThrower thrower,
                                       const base::FilePath& path) {
   using base::win::ShortcutProperties;
-  auto options = gin::Dictionary::CreateEmpty(thrower.isolate());
-  electron::ScopedAllowBlockingForElectron allow_blocking;
+  gin::Dictionary options = gin::Dictionary::CreateEmpty(thrower.isolate());
   base::win::ScopedCOMInitializer com_initializer;
   base::win::ShortcutProperties properties;
   if (!base::win::ResolveShortcutProperties(
@@ -185,4 +182,4 @@ void Initialize(v8::Local<v8::Object> exports,
 
 }  // namespace
 
-NODE_LINKED_BINDING_CONTEXT_AWARE(electron_common_shell, Initialize)
+NODE_LINKED_MODULE_CONTEXT_AWARE(electron_common_shell, Initialize)

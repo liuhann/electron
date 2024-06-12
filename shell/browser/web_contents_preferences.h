@@ -9,11 +9,9 @@
 #include <string>
 #include <vector>
 
-#include "base/memory/raw_ptr.h"
 #include "base/values.h"
 #include "content/public/browser/web_contents_user_data.h"
 #include "electron/buildflags/buildflags.h"
-#include "third_party/blink/public/common/renderer_preferences/renderer_preferences.h"
 #include "third_party/blink/public/mojom/v8_cache_options.mojom-forward.h"
 #include "third_party/blink/public/mojom/webpreferences/web_preferences.mojom-forward.h"
 
@@ -44,21 +42,20 @@ class WebContentsPreferences
 
   void SetFromDictionary(const gin_helper::Dictionary& new_web_preferences);
 
-  // Append command parameters according to preferences.
+  // Append command paramters according to preferences.
   void AppendCommandLineSwitches(base::CommandLine* command_line,
                                  bool is_subframe);
 
   // Modify the WebPreferences according to preferences.
-  void OverrideWebkitPrefs(blink::web_pref::WebPreferences* prefs,
-                           blink::RendererPreferences* renderer_prefs);
+  void OverrideWebkitPrefs(blink::web_pref::WebPreferences* prefs);
 
   base::Value* last_preference() { return &last_web_preferences_; }
 
   bool IsOffscreen() const { return offscreen_; }
-  std::optional<SkColor> GetBackgroundColor() const {
+  absl::optional<SkColor> GetBackgroundColor() const {
     return background_color_;
   }
-  void SetBackgroundColor(std::optional<SkColor> color) {
+  void SetBackgroundColor(absl::optional<SkColor> color) {
     background_color_ = color;
   }
   bool ShouldUsePreferredSizeMode() const {
@@ -95,7 +92,7 @@ class WebContentsPreferences
 
   // TODO(clavin): refactor to use the WebContents provided by the
   // WebContentsUserData base class instead of storing a duplicate ref
-  raw_ptr<content::WebContents> web_contents_;
+  content::WebContents* web_contents_;
 
   bool plugins_;
   bool experimental_features_;
@@ -104,12 +101,13 @@ class WebContentsPreferences
   bool node_integration_in_worker_;
   bool disable_html_fullscreen_window_resize_;
   bool webview_tag_;
-  std::optional<bool> sandbox_;
+  absl::optional<bool> sandbox_;
   bool context_isolation_;
   bool javascript_;
   bool images_;
   bool text_areas_are_resizable_;
   bool webgl_;
+  bool enable_websql_;
   bool enable_preferred_size_mode_;
   bool web_security_;
   bool allow_running_insecure_content_;
@@ -117,23 +115,23 @@ class WebContentsPreferences
   bool navigate_on_drag_drop_;
   blink::mojom::AutoplayPolicy autoplay_policy_;
   std::map<std::string, std::u16string> default_font_family_;
-  std::optional<int> default_font_size_;
-  std::optional<int> default_monospace_font_size_;
-  std::optional<int> minimum_font_size_;
-  std::optional<std::string> default_encoding_;
+  absl::optional<int> default_font_size_;
+  absl::optional<int> default_monospace_font_size_;
+  absl::optional<int> minimum_font_size_;
+  absl::optional<std::string> default_encoding_;
   bool is_webview_;
   std::vector<std::string> custom_args_;
   std::vector<std::string> custom_switches_;
-  std::optional<std::string> enable_blink_features_;
-  std::optional<std::string> disable_blink_features_;
+  absl::optional<std::string> enable_blink_features_;
+  absl::optional<std::string> disable_blink_features_;
   bool disable_popups_;
   bool disable_dialogs_;
   bool safe_dialogs_;
-  std::optional<std::string> safe_dialogs_message_;
+  absl::optional<std::string> safe_dialogs_message_;
   bool ignore_menu_shortcuts_;
-  std::optional<SkColor> background_color_;
+  absl::optional<SkColor> background_color_;
   blink::mojom::ImageAnimationPolicy image_animation_policy_;
-  std::optional<base::FilePath> preload_path_;
+  absl::optional<base::FilePath> preload_path_;
   blink::mojom::V8CacheOptions v8_cache_options_;
 
 #if BUILDFLAG(IS_MAC)

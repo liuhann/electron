@@ -6,12 +6,9 @@
 
 #include <utility>
 
-#if BUILDFLAG(ENABLE_ELECTRON_EXTENSIONS)
-#include <string_view>
-#endif  // BUILDFLAG(ENABLE_ELECTRON_EXTENSIONS)
-
 #include "base/command_line.h"
 #include "base/containers/contains.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
@@ -25,24 +22,22 @@
 #include "shell/browser/api/electron_api_session.h"
 #include "shell/browser/electron_permission_manager.h"
 #include "shell/browser/web_contents_permission_helper.h"
-#include "shell/common/electron_constants.h"
 #include "shell/common/gin_converters/content_converter.h"
 #include "shell/common/gin_converters/frame_converter.h"
 #include "shell/common/gin_converters/hid_device_info_converter.h"
 #include "shell/common/gin_converters/value_converter.h"
 #include "shell/common/gin_helper/dictionary.h"
 #include "third_party/blink/public/common/permissions/permission_utils.h"
-#include "ui/base/l10n/l10n_util.h"
 
-#if BUILDFLAG(ENABLE_ELECTRON_EXTENSIONS)
-#include "base/containers/fixed_flat_set.h"
-#include "extensions/common/constants.h"
-#endif  // BUILDFLAG(ENABLE_ELECTRON_EXTENSIONS)
+#include "ui/base/l10n/l10n_util.h"
 
 namespace electron {
 
 const char kHidDeviceNameKey[] = "name";
 const char kHidGuidKey[] = "guid";
+const char kHidVendorIdKey[] = "vendorId";
+const char kHidProductIdKey[] = "productId";
+const char kHidSerialNumberKey[] = "serialNumber";
 
 HidChooserContext::HidChooserContext(ElectronBrowserContext* context)
     : browser_context_(context) {}
@@ -77,23 +72,23 @@ bool HidChooserContext::CanStorePersistentEntry(
 // static
 base::Value HidChooserContext::DeviceInfoToValue(
     const device::mojom::HidDeviceInfo& device) {
-  base::Value::Dict value;
-  value.Set(
+  base::Value value(base::Value::Type::DICTIONARY);
+  value.SetStringKey(
       kHidDeviceNameKey,
       base::UTF16ToUTF8(HidChooserContext::DisplayNameFromDeviceInfo(device)));
-  value.Set(kDeviceVendorIdKey, device.vendor_id);
-  value.Set(kDeviceProductIdKey, device.product_id);
+  value.SetIntKey(kHidVendorIdKey, device.vendor_id);
+  value.SetIntKey(kHidProductIdKey, device.product_id);
   if (HidChooserContext::CanStorePersistentEntry(device)) {
     // Use the USB serial number as a persistent identifier. If it is
     // unavailable, only ephemeral permissions may be granted.
-    value.Set(kDeviceSerialNumberKey, device.serial_number);
+    value.SetStringKey(kHidSerialNumberKey, device.serial_number);
   } else {
     // The GUID is a temporary ID created on connection that remains valid until
     // the device is disconnected. Ephemeral permissions are keyed by this ID
     // and must be granted again each time the device is connected.
-    value.Set(kHidGuidKey, device.guid);
+    value.SetStringKey(kHidGuidKey, device.guid);
   }
-  return base::Value(std::move(value));
+  return value;
 }
 
 void HidChooserContext::GrantDevicePermission(
@@ -126,7 +121,8 @@ void HidChooserContext::RevokeDevicePermission(
   if (session) {
     v8::Isolate* isolate = JavascriptEnvironment::GetIsolate();
     v8::HandleScope scope(isolate);
-    auto details = gin_helper::Dictionary::CreateEmpty(isolate);
+    gin_helper::Dictionary details =
+        gin_helper::Dictionary::CreateEmpty(isolate);
     details.Set("device", device.Clone());
     details.Set("origin", origin.Serialize());
     session->Emit("hid-device-revoked", details);
@@ -188,26 +184,6 @@ bool HidChooserContext::HasDevicePermission(
       origin, DeviceInfoToValue(device), browser_context_);
 }
 
-bool HidChooserContext::IsFidoAllowedForOrigin(const url::Origin& origin) {
-#if BUILDFLAG(ENABLE_ELECTRON_EXTENSIONS)
-  static constexpr auto kPrivilegedExtensionIds =
-      base::MakeFixedFlatSet<std::string_view>({
-          "ckcendljdlmgnhghiaomidhiiclmapok",  // gnubbyd-v3 dev
-          "lfboplenmmjcmpbkeemecobbadnmpfhi",  // gnubbyd-v3 prod
-      });
-
-  if (origin.scheme() == extensions::kExtensionScheme &&
-      base::Contains(kPrivilegedExtensionIds, origin.host())) {
-    return true;
-  }
-#endif  // BUILDFLAG(ENABLE_ELECTRON_EXTENSIONS)
-
-  // This differs from upstream - we want to allow users greater
-  // ability to communicate with FIDO devices in Electron.
-  return base::CommandLine::ForCurrentProcess()->HasSwitch(
-      switches::kDisableHidBlocklist);
-}
-
 void HidChooserContext::AddDeviceObserver(DeviceObserver* observer) {
   EnsureHidManagerConnection();
   device_observer_list_.AddObserver(observer);
@@ -229,7 +205,7 @@ void HidChooserContext::GetDevices(
   device_list.reserve(devices_.size());
   for (const auto& pair : devices_)
     device_list.push_back(pair.second->Clone());
-  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+  base::SequencedTaskRunnerHandle::Get()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), std::move(device_list)));
 }
 

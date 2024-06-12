@@ -69,7 +69,7 @@ Menu.prototype.popup = function (options = {}) {
   if (options == null || typeof options !== 'object') {
     throw new TypeError('Options must be an object');
   }
-  let { window, x, y, positioningItem, sourceType, callback } = options;
+  let { window, x, y, positioningItem, callback } = options;
 
   // no callback passed
   if (!callback || typeof callback !== 'function') callback = () => {};
@@ -78,11 +78,10 @@ Menu.prototype.popup = function (options = {}) {
   if (typeof x !== 'number') x = -1;
   if (typeof y !== 'number') y = -1;
   if (typeof positioningItem !== 'number') positioningItem = -1;
-  if (typeof sourceType !== 'string' || !sourceType) sourceType = 'mouse';
 
   // find which window to use
   const wins = BaseWindow.getAllWindows();
-  if (!wins || !wins.includes(window as any)) {
+  if (!wins || wins.indexOf(window as any) === -1) {
     window = BaseWindow.getFocusedWindow() as any;
     if (!window && wins && wins.length > 0) {
       window = wins[0] as any;
@@ -92,7 +91,7 @@ Menu.prototype.popup = function (options = {}) {
     }
   }
 
-  this.popupAt(window as unknown as BaseWindow, x, y, positioningItem, sourceType, callback);
+  this.popupAt(window as unknown as BaseWindow, x, y, positioningItem, callback);
   return { browserWindow: window, x, y, position: positioningItem };
 };
 
@@ -143,7 +142,7 @@ Menu.prototype.insert = function (pos, item) {
   if (item.icon) this.setIcon(pos, item.icon);
   if (item.role) this.setRole(pos, item.role);
 
-  // Make menu accessible to items.
+  // Make menu accessable to items.
   item.overrideReadOnlyProperty('menu', this);
 
   // Remember the items.
@@ -153,9 +152,9 @@ Menu.prototype.insert = function (pos, item) {
 
 Menu.prototype._callMenuWillShow = function () {
   if (this.delegate) this.delegate.menuWillShow(this);
-  for (const item of this.items) {
+  this.items.forEach(item => {
     if (item.submenu) item.submenu._callMenuWillShow();
-  }
+  });
 };
 
 /* Static Methods */
@@ -196,13 +195,13 @@ Menu.buildFromTemplate = function (template) {
   const filtered = removeExtraSeparators(sorted);
 
   const menu = new Menu();
-  for (const item of filtered) {
+  filtered.forEach(item => {
     if (item instanceof MenuItem) {
       menu.append(item);
     } else {
       menu.append(new MenuItem(item));
     }
-  }
+  });
 
   return menu;
 };
@@ -214,7 +213,9 @@ function areValidTemplateItems (template: (MenuItemConstructorOptions | MenuItem
   return template.every(item =>
     item != null &&
     typeof item === 'object' &&
-    (Object.hasOwn(item, 'label') || Object.hasOwn(item, 'role') || item.type === 'separator'));
+    (Object.prototype.hasOwnProperty.call(item, 'label') ||
+     Object.prototype.hasOwnProperty.call(item, 'role') ||
+     item.type === 'separator'));
 }
 
 function sortTemplate (template: (MenuItemConstructorOptions | MenuItem)[]) {
@@ -280,9 +281,9 @@ function insertItemByType (this: MenuType, item: MenuItem, pos: number) {
         enumerable: true,
         get: () => checked.get(item),
         set: () => {
-          for (const other of this.groupsMap[item.groupId]) {
+          this.groupsMap[item.groupId].forEach(other => {
             if (other !== item) checked.set(other, false);
-          }
+          });
           checked.set(item, true);
         }
       });

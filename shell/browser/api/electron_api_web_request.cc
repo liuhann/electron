@@ -6,14 +6,9 @@
 
 #include <memory>
 #include <string>
-#include <string_view>
 #include <utility>
 
-#include "base/containers/contains.h"
-#include "base/containers/fixed_flat_map.h"
-#include "base/memory/raw_ptr.h"
 #include "base/stl_util.h"
-#include "base/task/sequenced_task_runner.h"
 #include "base/values.h"
 #include "extensions/browser/api/web_request/web_request_resource_type.h"
 #include "gin/converter.h"
@@ -33,40 +28,62 @@
 #include "shell/common/gin_converters/value_converter.h"
 #include "shell/common/gin_helper/dictionary.h"
 
-static constexpr auto ResourceTypes =
-    base::MakeFixedFlatMap<std::string_view,
-                           extensions::WebRequestResourceType>({
-        {"cspReport", extensions::WebRequestResourceType::CSP_REPORT},
-        {"font", extensions::WebRequestResourceType::FONT},
-        {"image", extensions::WebRequestResourceType::IMAGE},
-        {"mainFrame", extensions::WebRequestResourceType::MAIN_FRAME},
-        {"media", extensions::WebRequestResourceType::MEDIA},
-        {"object", extensions::WebRequestResourceType::OBJECT},
-        {"ping", extensions::WebRequestResourceType::PING},
-        {"script", extensions::WebRequestResourceType::SCRIPT},
-        {"stylesheet", extensions::WebRequestResourceType::STYLESHEET},
-        {"subFrame", extensions::WebRequestResourceType::SUB_FRAME},
-        {"webSocket", extensions::WebRequestResourceType::WEB_SOCKET},
-        {"xhr", extensions::WebRequestResourceType::XHR},
-    });
-
 namespace gin {
 
 template <>
 struct Converter<extensions::WebRequestResourceType> {
   static v8::Local<v8::Value> ToV8(v8::Isolate* isolate,
                                    extensions::WebRequestResourceType type) {
-    for (const auto& [name, val] : ResourceTypes)
-      if (type == val)
-        return StringToV8(isolate, name);
-
-    return StringToV8(isolate, "other");
+    const char* result;
+    switch (type) {
+      case extensions::WebRequestResourceType::MAIN_FRAME:
+        result = "mainFrame";
+        break;
+      case extensions::WebRequestResourceType::SUB_FRAME:
+        result = "subFrame";
+        break;
+      case extensions::WebRequestResourceType::STYLESHEET:
+        result = "stylesheet";
+        break;
+      case extensions::WebRequestResourceType::SCRIPT:
+        result = "script";
+        break;
+      case extensions::WebRequestResourceType::IMAGE:
+        result = "image";
+        break;
+      case extensions::WebRequestResourceType::FONT:
+        result = "font";
+        break;
+      case extensions::WebRequestResourceType::OBJECT:
+        result = "object";
+        break;
+      case extensions::WebRequestResourceType::XHR:
+        result = "xhr";
+        break;
+      case extensions::WebRequestResourceType::PING:
+        result = "ping";
+        break;
+      case extensions::WebRequestResourceType::CSP_REPORT:
+        result = "cspReport";
+        break;
+      case extensions::WebRequestResourceType::MEDIA:
+        result = "media";
+        break;
+      case extensions::WebRequestResourceType::WEB_SOCKET:
+        result = "webSocket";
+        break;
+      default:
+        result = "other";
+    }
+    return StringToV8(isolate, result);
   }
 };
 
 }  // namespace gin
 
-namespace electron::api {
+namespace electron {
+
+namespace api {
 
 namespace {
 
@@ -75,14 +92,20 @@ const char kUserDataKey[] = "WebRequest";
 // BrowserContext <=> WebRequest relationship.
 struct UserData : public base::SupportsUserData::Data {
   explicit UserData(WebRequest* data) : data(data) {}
-  raw_ptr<WebRequest> data;
+  WebRequest* data;
 };
 
-extensions::WebRequestResourceType ParseResourceType(std::string_view value) {
-  if (const auto* iter = ResourceTypes.find(value); iter != ResourceTypes.end())
-    return iter->second;
+// Test whether the URL of |request| matches |patterns|.
+bool MatchesFilterCondition(extensions::WebRequestInfo* info,
+                            const std::set<URLPattern>& patterns) {
+  if (patterns.empty())
+    return true;
 
-  return extensions::WebRequestResourceType::OTHER;
+  for (const auto& pattern : patterns) {
+    if (pattern.MatchesURL(info->url))
+      return true;
+  }
+  return false;
 }
 
 // Convert HttpResponseHeaders to V8.
@@ -92,12 +115,13 @@ extensions::WebRequestResourceType ParseResourceType(std::string_view value) {
 // to pass the original keys.
 v8::Local<v8::Value> HttpResponseHeadersToV8(
     net::HttpResponseHeaders* headers) {
-  base::Value::Dict response_headers;
+  base::DictionaryValue response_headers;
   if (headers) {
     size_t iter = 0;
     std::string key;
     std::string value;
     while (headers->EnumerateHeaderLines(&iter, &key, &value)) {
+      base::Value* values = response_headers.FindListKey(key);
       // Note that Web servers not developed with nodejs allow non-utf8
       // characters in content-disposition's filename field. Use Chromium's
       // HttpContentDisposition class to decode the correct encoding instead of
@@ -114,7 +138,9 @@ v8::Local<v8::Value> HttpResponseHeadersToV8(
         std::string filename = "\"" + header.filename() + "\"";
         value = decodedFilename + "; filename=" + filename;
       }
-      response_headers.EnsureList(key)->Append(value);
+      if (!values)
+        values = response_headers.SetKey(key, base::ListValue());
+      values->Append(value);
     }
   }
   return gin::ConvertToV8(v8::Isolate::GetCurrent(), response_headers);
@@ -126,8 +152,7 @@ void ToDictionary(gin_helper::Dictionary* details,
   details->Set("id", info->id);
   details->Set("url", info->url);
   details->Set("method", info->method);
-  details->Set("timestamp",
-               base::Time::Now().InSecondsFSinceUnixEpoch() * 1000);
+  details->Set("timestamp", base::Time::Now().ToDoubleT() * 1000);
   details->Set("resourceType", info->web_request_type);
   if (!info->response_ip.empty())
     details->Set("ip", info->response_ip);
@@ -222,54 +247,17 @@ void ReadFromResponse(v8::Isolate* isolate,
 
 gin::WrapperInfo WebRequest::kWrapperInfo = {gin::kEmbedderNativeGin};
 
-WebRequest::RequestFilter::RequestFilter(
-    std::set<URLPattern> url_patterns,
-    std::set<extensions::WebRequestResourceType> types)
-    : url_patterns_(std::move(url_patterns)), types_(std::move(types)) {}
-WebRequest::RequestFilter::RequestFilter(const RequestFilter&) = default;
-WebRequest::RequestFilter::RequestFilter() = default;
-WebRequest::RequestFilter::~RequestFilter() = default;
-
-void WebRequest::RequestFilter::AddUrlPattern(URLPattern pattern) {
-  url_patterns_.emplace(std::move(pattern));
-}
-
-void WebRequest::RequestFilter::AddType(
-    extensions::WebRequestResourceType type) {
-  types_.insert(type);
-}
-
-bool WebRequest::RequestFilter::MatchesURL(const GURL& url) const {
-  if (url_patterns_.empty())
-    return true;
-
-  for (const auto& pattern : url_patterns_) {
-    if (pattern.MatchesURL(url))
-      return true;
-  }
-  return false;
-}
-
-bool WebRequest::RequestFilter::MatchesType(
-    extensions::WebRequestResourceType type) const {
-  return types_.empty() || base::Contains(types_, type);
-}
-
-bool WebRequest::RequestFilter::MatchesRequest(
-    extensions::WebRequestInfo* info) const {
-  return MatchesURL(info->url) && MatchesType(info->web_request_type);
-}
-
-WebRequest::SimpleListenerInfo::SimpleListenerInfo(RequestFilter filter_,
-                                                   SimpleListener listener_)
-    : filter(std::move(filter_)), listener(listener_) {}
+WebRequest::SimpleListenerInfo::SimpleListenerInfo(
+    std::set<URLPattern> patterns_,
+    SimpleListener listener_)
+    : url_patterns(std::move(patterns_)), listener(listener_) {}
 WebRequest::SimpleListenerInfo::SimpleListenerInfo() = default;
 WebRequest::SimpleListenerInfo::~SimpleListenerInfo() = default;
 
 WebRequest::ResponseListenerInfo::ResponseListenerInfo(
-    RequestFilter filter_,
+    std::set<URLPattern> patterns_,
     ResponseListener listener_)
-    : filter(std::move(filter_)), listener(listener_) {}
+    : url_patterns(std::move(patterns_)), listener(listener_) {}
 WebRequest::ResponseListenerInfo::ResponseListenerInfo() = default;
 WebRequest::ResponseListenerInfo::~ResponseListenerInfo() = default;
 
@@ -404,8 +392,8 @@ void WebRequest::SetListener(Event event,
                              gin::Arguments* args) {
   v8::Local<v8::Value> arg;
 
-  // { urls, types }.
-  std::set<std::string> filter_patterns, filter_types;
+  // { urls }.
+  std::set<std::string> filter_patterns;
   gin::Dictionary dict(args->isolate());
   if (args->GetNext(&arg) && !arg->IsFunction()) {
     // Note that gin treats Function as Dictionary when doing conversions, so we
@@ -416,32 +404,20 @@ void WebRequest::SetListener(Event event,
         args->ThrowTypeError("Parameter 'filter' must have property 'urls'.");
         return;
       }
-      dict.Get("types", &filter_types);
       args->GetNext(&arg);
     }
   }
 
-  RequestFilter filter;
-
+  std::set<URLPattern> patterns;
   for (const std::string& filter_pattern : filter_patterns) {
     URLPattern pattern(URLPattern::SCHEME_ALL);
     const URLPattern::ParseResult result = pattern.Parse(filter_pattern);
     if (result == URLPattern::ParseResult::kSuccess) {
-      filter.AddUrlPattern(std::move(pattern));
+      patterns.insert(pattern);
     } else {
       const char* error_type = URLPattern::GetParseResultString(result);
       args->ThrowTypeError("Invalid url pattern " + filter_pattern + ": " +
                            error_type);
-      return;
-    }
-  }
-
-  for (const std::string& filter_type : filter_types) {
-    auto type = ParseResourceType(filter_type);
-    if (type != extensions::WebRequestResourceType::OTHER) {
-      filter.AddType(type);
-    } else {
-      args->ThrowTypeError("Invalid type " + filter_type);
       return;
     }
   }
@@ -457,7 +433,7 @@ void WebRequest::SetListener(Event event,
   if (listener.is_null())
     listeners->erase(event);
   else
-    (*listeners)[event] = {std::move(filter), std::move(listener)};
+    (*listeners)[event] = {std::move(patterns), std::move(listener)};
 }
 
 template <typename... Args>
@@ -469,7 +445,7 @@ void WebRequest::HandleSimpleEvent(SimpleEvent event,
     return;
 
   const auto& info = iter->second;
-  if (!info.filter.MatchesRequest(request_info))
+  if (!MatchesFilterCondition(request_info, info.url_patterns))
     return;
 
   v8::Isolate* isolate = JavascriptEnvironment::GetIsolate();
@@ -490,7 +466,7 @@ int WebRequest::HandleResponseEvent(ResponseEvent event,
     return net::OK;
 
   const auto& info = iter->second;
-  if (!info.filter.MatchesRequest(request_info))
+  if (!MatchesFilterCondition(request_info, info.url_patterns))
     return net::OK;
 
   callbacks_[request_info->id] = std::move(callback);
@@ -530,7 +506,7 @@ void WebRequest::OnListenerResult(uint64_t id,
 
   // The ProxyingURLLoaderFactory expects the callback to be executed
   // asynchronously, because it used to work on IO thread before NetworkService.
-  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+  base::SequencedTaskRunnerHandle::Get()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callbacks_[id]), result));
   callbacks_.erase(iter);
 }
@@ -571,7 +547,9 @@ gin::Handle<WebRequest> WebRequest::From(
       static_cast<UserData*>(browser_context->GetUserData(kUserDataKey));
   if (!user_data)
     return gin::Handle<WebRequest>();
-  return gin::CreateHandle(isolate, user_data->data.get());
+  return gin::CreateHandle(isolate, user_data->data);
 }
 
-}  // namespace electron::api
+}  // namespace api
+
+}  // namespace electron

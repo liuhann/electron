@@ -11,74 +11,79 @@ if we ever align our .pak file generation with Chrome we can remove this
 patch.
 
 diff --git a/chrome/BUILD.gn b/chrome/BUILD.gn
-index ce54376e4a56053fc8dc33ceeabcbc26f85ae40a..eef187949d45296dad0808f88652590e01bb71ee 100644
+index b6234183651923505bd2a4a8640ea21508033ef1..e486f92e909f43bb65633245b7dcb3145d0a7604 100644
 --- a/chrome/BUILD.gn
 +++ b/chrome/BUILD.gn
-@@ -192,11 +192,16 @@ if (!is_android && !is_mac) {
-           "common/crash_keys.h",
-         ]
+@@ -175,11 +175,16 @@ if (!is_android && !is_mac) {
+         "common/crash_keys.h",
+       ]
  
-+        if (!is_electron_build) {
-+          deps = [
-+            ":packed_resources_integrity_header",
-+          ]
-+        }
++      if (!is_electron_build) {
++        deps = [
++          ":packed_resources_integrity",
++        ]
++      }
 +
-         deps += [
-           ":chrome_dll",
-           ":chrome_exe_version",
-           ":copy_first_run",
--          ":packed_resources_integrity_header",
-           ":visual_elements_resources",
-           "//base",
-           "//build:branding_buildflags",
+       deps += [
+         ":chrome_dll",
+         ":chrome_exe_version",
+         ":copy_first_run",
+-        ":packed_resources_integrity",
+         ":visual_elements_resources",
+         "//base",
+         "//build:branding_buildflags",
 diff --git a/chrome/browser/BUILD.gn b/chrome/browser/BUILD.gn
-index 8676580bd02dc424666dc41698c1b1d638bae721..a812e9787894e2f9d7eac97118406d8d2479de87 100644
+index bbe8847b3da8d6ec9c5d10bbe875de8c34e060d3..e2e12c141932f52f49d24a0bad4a53007133d9de 100644
 --- a/chrome/browser/BUILD.gn
 +++ b/chrome/browser/BUILD.gn
-@@ -4904,7 +4904,7 @@ static_library("browser") {
+@@ -4551,7 +4551,7 @@ static_library("browser") {
  
      # On Windows, the hashes are embedded in //chrome:chrome_initial rather
      # than here in :chrome_dll.
 -    if (!is_win) {
 +    if (!is_win && !is_electron_build) {
-       deps += [ "//chrome:packed_resources_integrity_header" ]
+       deps += [ "//chrome:packed_resources_integrity" ]
        sources += [ "certificate_viewer_stub.cc" ]
      }
 diff --git a/chrome/test/BUILD.gn b/chrome/test/BUILD.gn
-index ee5eb6b794dfd944fcf94c55706a809c9f62d583..3e703e7f9ed8e286d55b54d8dd970d320a873f30 100644
+index e791e09b43760ecc3aac9af7bac252233e6bae0b..baacf6bf01fa9df05bd9c2d87d3519666f41fc77 100644
 --- a/chrome/test/BUILD.gn
 +++ b/chrome/test/BUILD.gn
-@@ -7395,9 +7395,12 @@ test("unit_tests") {
-       "//chrome/browser/safe_browsing/incident_reporting/verifier_test:verifier_test_dll_2",
-     ]
+@@ -5913,7 +5913,6 @@ test("unit_tests") {
  
-+    if (!is_electron_build) {
-+      deps += [ "//chrome:packed_resources_integrity_header" ]
-+    }
-+
      deps += [
        "//chrome:other_version",
--      "//chrome:packed_resources_integrity_header",
+-      "//chrome:packed_resources_integrity",
        "//chrome//services/util_win:unit_tests",
        "//chrome/app:chrome_dll_resources",
-       "//chrome/app:win_unit_tests",
-@@ -8395,6 +8398,10 @@ test("unit_tests") {
-       "../browser/performance_manager/policies/background_tab_loading_policy_unittest.cc",
+       "//chrome/browser:chrome_process_finder",
+@@ -5937,6 +5936,10 @@ test("unit_tests") {
+       "//ui/resources",
      ]
  
 +    if (!is_electron_build) {
-+      deps += [ "//chrome:packed_resources_integrity_header" ]
++      deps += [ "//chrome:packed_resources_integrity" ]
 +    }
 +
-     sources += [
-       # The importer code is not used on Android.
-       "../common/importer/firefox_importer_utils_unittest.cc",
-@@ -8472,7 +8479,6 @@ test("unit_tests") {
+     ldflags = [
+       "/DELAYLOAD:api-ms-win-core-winrt-error-l1-1-0.dll",
+       "/DELAYLOAD:api-ms-win-core-winrt-l1-1-0.dll",
+@@ -6827,7 +6830,6 @@ test("unit_tests") {
      }
  
      deps += [
--      "//chrome:packed_resources_integrity_header",
-       "//chrome/browser/apps:icon_standardizer",
-       "//chrome/browser/apps/app_service",
-       "//chrome/browser/apps/app_service:app_registry_cache_waiter",
+-      "//chrome:packed_resources_integrity_hash",
+       "//chrome/browser:cart_db_content_proto",
+       "//chrome/browser:coupon_db_content_proto",
+       "//chrome/browser/media/router:test_support",
+@@ -6933,6 +6935,10 @@ test("unit_tests") {
+     }
+   }
+ 
++  if (!is_electron_build) {
++    deps += [ "//chrome:packed_resources_integrity_hash" ]
++  }
++
+   if (is_chromeos_ash) {
+     sources -= [
+       "../browser/policy/cloud/user_policy_signin_service_unittest.cc",

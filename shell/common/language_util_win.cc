@@ -18,6 +18,12 @@ namespace electron {
 
 bool GetPreferredLanguagesUsingGlobalization(
     std::vector<std::wstring>* languages) {
+  if (base::win::GetVersion() < base::win::Version::WIN10)
+    return false;
+  if (!base::win::ResolveCoreWinRTDelayload() ||
+      !base::win::ScopedHString::ResolveCoreWinRTStringDelayload())
+    return false;
+
   base::win::ScopedHString guid = base::win::ScopedHString::Create(
       RuntimeClass_Windows_System_UserProfile_GlobalizationPreferences);
   Microsoft::WRL::ComPtr<
@@ -43,7 +49,7 @@ bool GetPreferredLanguagesUsingGlobalization(
     HSTRING hstr;
     hr = langs->GetAt(i, &hstr);
     if (SUCCEEDED(hr)) {
-      std::wstring_view str = base::win::ScopedHString(hstr).Get();
+      base::WStringPiece str = base::win::ScopedHString(hstr).Get();
       languages->emplace_back(str.data(), str.size());
     }
   }

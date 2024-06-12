@@ -9,7 +9,8 @@ let currentlyRunning: {
 
 // |options.types| can't be empty and must be an array
 function isValid (options: Electron.SourcesOptions) {
-  return Array.isArray(options?.types);
+  const types = options ? options.types : undefined;
+  return Array.isArray(types);
 }
 
 export async function getSources (args: Electron.SourcesOptions) {

@@ -104,10 +104,6 @@ content::DropData* OffScreenWebContentsView::GetDropData() const {
   return nullptr;
 }
 
-void OffScreenWebContentsView::TransferDragSecurityInfo(WebContentsView* view) {
-  NOTREACHED();
-}
-
 gfx::Rect OffScreenWebContentsView::GetViewBounds() const {
   return GetView() ? GetView()->GetViewBounds() : gfx::Rect();
 }
@@ -139,7 +135,7 @@ OffScreenWebContentsView::CreateViewForChildWidget(
           : web_contents_impl->GetRenderWidgetHostView());
 
   return new OffScreenRenderWidgetHostView(transparent_, painting_,
-                                           view->frame_rate(), callback_,
+                                           view->GetFrameRate(), callback_,
                                            render_widget_host, view, GetSize());
 }
 
@@ -166,11 +162,9 @@ bool OffScreenWebContentsView::CloseTabAfterEventTrackingIfNeeded() {
 
 void OffScreenWebContentsView::StartDragging(
     const content::DropData& drop_data,
-    const url::Origin& source_origin,
     blink::DragOperationsMask allowed_ops,
     const gfx::ImageSkia& image,
-    const gfx::Vector2d& cursor_offset,
-    const gfx::Rect& drag_obj_rect,
+    const gfx::Vector2d& image_offset,
     const blink::mojom::DragEventSourceInfo& event_info,
     content::RenderWidgetHostImpl* source_rwh) {
   if (web_contents_)
@@ -178,9 +172,8 @@ void OffScreenWebContentsView::StartDragging(
         ->SystemDragEnded(source_rwh);
 }
 
-void OffScreenWebContentsView::UpdateDragOperation(
-    ui::mojom::DragOperation operation,
-    bool document_is_handling_drag) {}
+void OffScreenWebContentsView::UpdateDragCursor(
+    ui::mojom::DragOperation operation) {}
 
 void OffScreenWebContentsView::SetPainting(bool painting) {
   auto* view = GetView();
@@ -191,9 +184,12 @@ void OffScreenWebContentsView::SetPainting(bool painting) {
 }
 
 bool OffScreenWebContentsView::IsPainting() const {
-  if (auto* view = GetView())
-    return view->is_painting();
-  return painting_;
+  auto* view = GetView();
+  if (view != nullptr) {
+    return view->IsPainting();
+  } else {
+    return painting_;
+  }
 }
 
 void OffScreenWebContentsView::SetFrameRate(int frame_rate) {
@@ -205,9 +201,12 @@ void OffScreenWebContentsView::SetFrameRate(int frame_rate) {
 }
 
 int OffScreenWebContentsView::GetFrameRate() const {
-  if (auto* view = GetView())
-    return view->frame_rate();
-  return frame_rate_;
+  auto* view = GetView();
+  if (view != nullptr) {
+    return view->GetFrameRate();
+  } else {
+    return frame_rate_;
+  }
 }
 
 OffScreenRenderWidgetHostView* OffScreenWebContentsView::GetView() const {
@@ -215,16 +214,6 @@ OffScreenRenderWidgetHostView* OffScreenWebContentsView::GetView() const {
     return static_cast<OffScreenRenderWidgetHostView*>(
         web_contents_->GetRenderViewHost()->GetWidget()->GetView());
   }
-  return nullptr;
-}
-
-void OffScreenWebContentsView::FullscreenStateChanged(bool is_fullscreen) {}
-
-void OffScreenWebContentsView::UpdateWindowControlsOverlay(
-    const gfx::Rect& bounding_rect) {}
-
-content::BackForwardTransitionAnimationManager*
-OffScreenWebContentsView::GetBackForwardTransitionAnimationManager() {
   return nullptr;
 }
 

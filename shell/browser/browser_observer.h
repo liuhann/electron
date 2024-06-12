@@ -12,6 +12,10 @@
 #include "build/build_config.h"
 #include "shell/browser/login_handler.h"
 
+namespace base {
+class DictionaryValue;
+}
+
 namespace electron {
 
 class BrowserObserver : public base::CheckedObserver {
@@ -22,7 +26,7 @@ class BrowserObserver : public base::CheckedObserver {
   // The browser has closed all windows and will quit.
   virtual void OnWillQuit(bool* prevent_default) {}
 
-  // The browser has closed all windows. If the browser is quitting, then this
+  // The browser has closed all windows. If the browser is quiting, then this
   // method will not be called, instead it will call OnWillQuit.
   virtual void OnWindowAllClosed() {}
 
@@ -43,9 +47,9 @@ class BrowserObserver : public base::CheckedObserver {
 
   // The browser has finished loading.
   virtual void OnWillFinishLaunching() {}
-  virtual void OnFinishLaunching(base::Value::Dict launch_info) {}
+  virtual void OnFinishLaunching(const base::DictionaryValue& launch_info) {}
 
-  // The browser's accessibility support has changed.
+  // The browser's accessibility suppport has changed.
   virtual void OnAccessibilitySupportChanged() {}
 
   // The app message loop is ready
@@ -66,22 +70,22 @@ class BrowserObserver : public base::CheckedObserver {
   // The browser wants to resume a user activity via handoff. (macOS only)
   virtual void OnContinueUserActivity(bool* prevent_default,
                                       const std::string& type,
-                                      base::Value::Dict user_info,
-                                      base::Value::Dict details) {}
+                                      const base::DictionaryValue& user_info,
+                                      const base::DictionaryValue& details) {}
   // The browser wants to notify that an user activity was resumed. (macOS only)
-  virtual void OnUserActivityWasContinued(const std::string& type,
-                                          base::Value::Dict user_info) {}
+  virtual void OnUserActivityWasContinued(
+      const std::string& type,
+      const base::DictionaryValue& user_info) {}
   // The browser wants to update an user activity payload. (macOS only)
-  virtual void OnUpdateUserActivityState(bool* prevent_default,
-                                         const std::string& type,
-                                         base::Value::Dict user_info) {}
+  virtual void OnUpdateUserActivityState(
+      bool* prevent_default,
+      const std::string& type,
+      const base::DictionaryValue& user_info) {}
   // User clicked the native macOS new tab button. (macOS only)
   virtual void OnNewWindowForTab() {}
 
-  // Browser became active.
+  // Browser did become active.
   virtual void OnDidBecomeActive() {}
-  // Browser lost active status.
-  virtual void OnDidResignActive() {}
 #endif
 
  protected:

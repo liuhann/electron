@@ -29,15 +29,12 @@ ElectronSerialDelegate::~ElectronSerialDelegate() = default;
 std::unique_ptr<content::SerialChooser> ElectronSerialDelegate::RunChooser(
     content::RenderFrameHost* frame,
     std::vector<blink::mojom::SerialPortFilterPtr> filters,
-    std::vector<device::BluetoothUUID> allowed_bluetooth_service_class_ids,
     content::SerialChooser::Callback callback) {
   SerialChooserController* controller = ControllerForFrame(frame);
   if (controller) {
     DeleteControllerForFrame(frame);
   }
-  AddControllerForFrame(frame, std::move(filters),
-                        std::move(allowed_bluetooth_service_class_ids),
-                        std::move(callback));
+  AddControllerForFrame(frame, std::move(filters), std::move(callback));
 
   // Return a nullptr because the return value isn't used for anything, eg
   // there is no mechanism to cancel navigator.serial.requestPort(). The return
@@ -52,31 +49,18 @@ bool ElectronSerialDelegate::CanRequestPortPermission(
   auto* permission_helper =
       WebContentsPermissionHelper::FromWebContents(web_contents);
   return permission_helper->CheckSerialAccessPermission(
-      web_contents->GetPrimaryMainFrame()->GetLastCommittedOrigin());
+      web_contents->GetMainFrame()->GetLastCommittedOrigin());
 }
 
 bool ElectronSerialDelegate::HasPortPermission(
     content::RenderFrameHost* frame,
     const device::mojom::SerialPortInfo& port) {
   auto* web_contents = content::WebContents::FromRenderFrameHost(frame);
-  return GetChooserContext(frame)->HasPortPermission(
-      web_contents->GetPrimaryMainFrame()->GetLastCommittedOrigin(), port,
-      frame);
-}
-
-void ElectronSerialDelegate::RevokePortPermissionWebInitiated(
-    content::RenderFrameHost* frame,
-    const base::UnguessableToken& token) {
-  auto* web_contents = content::WebContents::FromRenderFrameHost(frame);
-  return GetChooserContext(frame)->RevokePortPermissionWebInitiated(
-      web_contents->GetPrimaryMainFrame()->GetLastCommittedOrigin(), token,
-      frame);
-}
-
-const device::mojom::SerialPortInfo* ElectronSerialDelegate::GetPortInfo(
-    content::RenderFrameHost* frame,
-    const base::UnguessableToken& token) {
-  return GetChooserContext(frame)->GetPortInfo(token);
+  auto* browser_context = web_contents->GetBrowserContext();
+  auto* chooser_context =
+      SerialChooserContextFactory::GetForBrowserContext(browser_context);
+  return chooser_context->HasPortPermission(
+      web_contents->GetMainFrame()->GetLastCommittedOrigin(), port, frame);
 }
 
 device::mojom::SerialPortManager* ElectronSerialDelegate::GetPortManager(
@@ -99,6 +83,19 @@ void ElectronSerialDelegate::RemoveObserver(
   observer_list_.RemoveObserver(observer);
 }
 
+void ElectronSerialDelegate::RevokePortPermissionWebInitiated(
+    content::RenderFrameHost* frame,
+    const base::UnguessableToken& token) {
+  // TODO(nornagon/jkleinsc): pass this on to the chooser context
+}
+
+const device::mojom::SerialPortInfo* ElectronSerialDelegate::GetPortInfo(
+    content::RenderFrameHost* frame,
+    const base::UnguessableToken& token) {
+  // TODO(nornagon/jkleinsc): pass this on to the chooser context
+  return nullptr;
+}
+
 SerialChooserController* ElectronSerialDelegate::ControllerForFrame(
     content::RenderFrameHost* render_frame_host) {
   auto mapping = controller_map_.find(render_frame_host);
@@ -108,14 +105,12 @@ SerialChooserController* ElectronSerialDelegate::ControllerForFrame(
 SerialChooserController* ElectronSerialDelegate::AddControllerForFrame(
     content::RenderFrameHost* render_frame_host,
     std::vector<blink::mojom::SerialPortFilterPtr> filters,
-    std::vector<device::BluetoothUUID> allowed_bluetooth_service_class_ids,
     content::SerialChooser::Callback callback) {
   auto* web_contents =
       content::WebContents::FromRenderFrameHost(render_frame_host);
   auto controller = std::make_unique<SerialChooserController>(
-      render_frame_host, std::move(filters),
-      std::move(allowed_bluetooth_service_class_ids), std::move(callback),
-      web_contents, weak_factory_.GetWeakPtr());
+      render_frame_host, std::move(filters), std::move(callback), web_contents,
+      weak_factory_.GetWeakPtr());
   controller_map_.insert(
       std::make_pair(render_frame_host, std::move(controller)));
   return ControllerForFrame(render_frame_host);

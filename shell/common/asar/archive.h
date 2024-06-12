@@ -6,25 +6,26 @@
 #define ELECTRON_SHELL_COMMON_ASAR_ARCHIVE_H_
 
 #include <memory>
-#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
-#include <uv.h>
-
 #include "base/files/file.h"
 #include "base/files/file_path.h"
 #include "base/synchronization/lock.h"
-#include "base/values.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
+
+namespace base {
+class DictionaryValue;
+}
 
 namespace asar {
 
 class ScopedTemporaryFile;
 
-enum class HashAlgorithm {
-  kSHA256,
-  kNone,
+enum HashAlgorithm {
+  SHA256,
+  NONE,
 };
 
 struct IntegrityPayload {
@@ -48,17 +49,14 @@ class Archive {
     bool executable;
     uint32_t size;
     uint64_t offset;
-    std::optional<IntegrityPayload> integrity;
-  };
-
-  enum class FileType {
-    kFile = UV_DIRENT_FILE,
-    kDirectory = UV_DIRENT_DIR,
-    kLink = UV_DIRENT_LINK,
+    absl::optional<IntegrityPayload> integrity;
   };
 
   struct Stats : public FileInfo {
-    FileType type = FileType::kFile;
+    Stats() : is_file(true), is_directory(false), is_link(false) {}
+    bool is_file;
+    bool is_directory;
+    bool is_link;
   };
 
   explicit Archive(const base::FilePath& path);
@@ -71,8 +69,8 @@ class Archive {
   // Read and parse the header.
   bool Init();
 
-  std::optional<IntegrityPayload> HeaderIntegrity() const;
-  std::optional<base::FilePath> RelativePath() const;
+  absl::optional<IntegrityPayload> HeaderIntegrity() const;
+  absl::optional<base::FilePath> RelativePath() const;
 
   // Get the info of a file.
   bool GetFileInfo(const base::FilePath& path, FileInfo* info) const;
@@ -106,7 +104,7 @@ class Archive {
   base::File file_;
   int fd_ = -1;
   uint32_t header_size_ = 0;
-  std::optional<base::Value::Dict> header_;
+  std::unique_ptr<base::DictionaryValue> header_;
 
   // Cached external temporary files.
   base::Lock external_files_lock_;

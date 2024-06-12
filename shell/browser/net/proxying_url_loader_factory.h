@@ -6,15 +6,12 @@
 #define ELECTRON_SHELL_BROWSER_NET_PROXYING_URL_LOADER_FACTORY_H_
 
 #include <cstdint>
+#include <map>
 #include <memory>
-#include <optional>
 #include <set>
 #include <string>
 #include <vector>
 
-#include "base/containers/flat_map.h"
-#include "base/memory/raw_ptr.h"
-#include "base/memory/raw_ref.h"
 #include "base/memory/weak_ptr.h"
 #include "content/public/browser/content_browser_client.h"
 #include "content/public/browser/render_frame_host.h"
@@ -34,11 +31,10 @@
 #include "services/network/url_loader_factory.h"
 #include "shell/browser/net/electron_url_loader_factory.h"
 #include "shell/browser/net/web_request_api_interface.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 namespace electron {
-
-const uint32_t kBypassCustomProtocolHandlers = 1 << 30;
 
 // This class is responsible for following tasks when NetworkService is enabled:
 // 1. handling intercepted protocols;
@@ -83,7 +79,7 @@ class ProxyingURLLoaderFactory
         const std::vector<std::string>& removed_headers,
         const net::HttpRequestHeaders& modified_headers,
         const net::HttpRequestHeaders& modified_cors_exempt_headers,
-        const std::optional<GURL>& new_url) override;
+        const absl::optional<GURL>& new_url) override;
     void SetPriority(net::RequestPriority priority,
                      int32_t intra_priority_value) override;
     void PauseReadingBodyFromNet() override;
@@ -92,15 +88,14 @@ class ProxyingURLLoaderFactory
     // network::mojom::URLLoaderClient:
     void OnReceiveEarlyHints(
         network::mojom::EarlyHintsPtr early_hints) override;
-    void OnReceiveResponse(
-        network::mojom::URLResponseHeadPtr head,
-        mojo::ScopedDataPipeConsumerHandle body,
-        std::optional<mojo_base::BigBuffer> cached_metadata) override;
+    void OnReceiveResponse(network::mojom::URLResponseHeadPtr head,
+                           mojo::ScopedDataPipeConsumerHandle body) override;
     void OnReceiveRedirect(const net::RedirectInfo& redirect_info,
                            network::mojom::URLResponseHeadPtr head) override;
     void OnUploadProgress(int64_t current_position,
                           int64_t total_size,
                           OnUploadProgressCallback callback) override;
+    void OnReceiveCachedMetadata(mojo_base::BigBuffer data) override;
     void OnTransferSizeUpdated(int32_t transfer_size_diff) override;
     void OnComplete(const network::URLLoaderCompletionStatus& status) override;
 
@@ -133,9 +128,9 @@ class ProxyingURLLoaderFactory
     void OnRequestError(const network::URLLoaderCompletionStatus& status);
     void HandleBeforeRequestRedirect();
 
-    raw_ptr<ProxyingURLLoaderFactory> const factory_;
+    ProxyingURLLoaderFactory* const factory_;
     network::ResourceRequest request_;
-    const std::optional<url::Origin> original_initiator_;
+    const absl::optional<url::Origin> original_initiator_;
     const uint64_t request_id_ = 0;
     const int32_t network_service_request_id_ = 0;
     const int32_t frame_routing_id_ = MSG_ROUTING_NONE;
@@ -144,7 +139,7 @@ class ProxyingURLLoaderFactory
     mojo::Receiver<network::mojom::URLLoader> proxied_loader_receiver_;
     mojo::Remote<network::mojom::URLLoaderClient> target_client_;
 
-    std::optional<extensions::WebRequestInfo> info_;
+    absl::optional<extensions::WebRequestInfo> info_;
 
     mojo::Receiver<network::mojom::URLLoaderClient> proxied_client_receiver_{
         this};
@@ -180,15 +175,13 @@ class ProxyingURLLoaderFactory
       std::vector<std::string> removed_headers;
       net::HttpRequestHeaders modified_headers;
       net::HttpRequestHeaders modified_cors_exempt_headers;
-      std::optional<GURL> new_url;
+      absl::optional<GURL> new_url;
 
       // disable copy
       FollowRedirectParams(const FollowRedirectParams&) = delete;
       FollowRedirectParams& operator=(const FollowRedirectParams&) = delete;
     };
     std::unique_ptr<FollowRedirectParams> pending_follow_redirect_params_;
-
-    std::optional<mojo_base::BigBuffer> current_cached_metadata_;
 
     base::WeakPtrFactory<InProgressRequest> weak_factory_{this};
   };
@@ -200,7 +193,7 @@ class ProxyingURLLoaderFactory
       int frame_routing_id,
       uint64_t* request_id_generator,
       std::unique_ptr<extensions::ExtensionNavigationUIData> navigation_ui_data,
-      std::optional<int64_t> navigation_id,
+      absl::optional<int64_t> navigation_id,
       mojo::PendingReceiver<network::mojom::URLLoaderFactory> loader_request,
       mojo::PendingRemote<network::mojom::URLLoaderFactory>
           target_factory_remote,
@@ -249,7 +242,7 @@ class ProxyingURLLoaderFactory
   bool ShouldIgnoreConnectionsLimit(const network::ResourceRequest& request);
 
   // Passed from api::WebRequest.
-  raw_ptr<WebRequestAPI> web_request_api_;
+  WebRequestAPI* web_request_api_;
 
   // This is passed from api::Protocol.
   //
@@ -258,13 +251,13 @@ class ProxyingURLLoaderFactory
   // reference is guaranteed to be valid.
   //
   // In this way we can avoid using code from api namespace in this file.
-  const raw_ref<const HandlersMap> intercepted_handlers_;
+  const HandlersMap& intercepted_handlers_;
 
   const int render_process_id_;
   const int frame_routing_id_;
-  raw_ptr<uint64_t> request_id_generator_;  // managed by ElectronBrowserClient
+  uint64_t* request_id_generator_;  // managed by ElectronBrowserClient
   std::unique_ptr<extensions::ExtensionNavigationUIData> navigation_ui_data_;
-  std::optional<int64_t> navigation_id_;
+  absl::optional<int64_t> navigation_id_;
   mojo::ReceiverSet<network::mojom::URLLoaderFactory> proxy_receivers_;
   mojo::Remote<network::mojom::URLLoaderFactory> target_factory_;
   mojo::Receiver<network::mojom::TrustedURLLoaderHeaderClient>
@@ -274,11 +267,11 @@ class ProxyingURLLoaderFactory
 
   // Mapping from our own internally generated request ID to an
   // InProgressRequest instance.
-  base::flat_map<uint64_t, std::unique_ptr<InProgressRequest>> requests_;
+  std::map<uint64_t, std::unique_ptr<InProgressRequest>> requests_;
 
   // A mapping from the network stack's notion of request ID to our own
   // internally generated request ID for the same request.
-  base::flat_map<int32_t, uint64_t> network_request_id_to_web_request_id_;
+  std::map<int32_t, uint64_t> network_request_id_to_web_request_id_;
 
   std::vector<std::string> ignore_connections_limit_domains_;
 };

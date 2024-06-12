@@ -9,7 +9,8 @@
 #include "ui/events/event_constants.h"
 #include "v8/include/v8.h"
 
-namespace electron::api {
+namespace electron {
+namespace api {
 
 constexpr int mouse_button_flags =
     (ui::EF_RIGHT_MOUSE_BUTTON | ui::EF_LEFT_MOUSE_BUTTON |
@@ -28,4 +29,5 @@ v8::Local<v8::Object> CreateEventFromFlags(int flags) {
       .Build();
 }
 
-}  // namespace electron::api
+}  // namespace api
+}  // namespace electron

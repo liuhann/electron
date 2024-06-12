@@ -10,7 +10,6 @@
 
 namespace electron {
 
-// Copied from chrome/browser/ui/views/frame/windows_icon_painter.h
 class WinIconPainter {
  public:
   WinIconPainter();
@@ -23,22 +22,22 @@ class WinIconPainter {
   // Paints the minimize icon for the button
   virtual void PaintMinimizeIcon(gfx::Canvas* canvas,
                                  const gfx::Rect& symbol_rect,
-                                 cc::PaintFlags& flags);
+                                 const cc::PaintFlags& flags);
 
   // Paints the maximize icon for the button
   virtual void PaintMaximizeIcon(gfx::Canvas* canvas,
                                  const gfx::Rect& symbol_rect,
-                                 cc::PaintFlags& flags);
+                                 const cc::PaintFlags& flags);
 
   // Paints the restore icon for the button
   virtual void PaintRestoreIcon(gfx::Canvas* canvas,
                                 const gfx::Rect& symbol_rect,
-                                cc::PaintFlags& flags);
+                                const cc::PaintFlags& flags);
 
   // Paints the close icon for the button
   virtual void PaintCloseIcon(gfx::Canvas* canvas,
                               const gfx::Rect& symbol_rect,
-                              cc::PaintFlags& flags);
+                              const cc::PaintFlags& flags);
 };
 
 class Win11IconPainter : public WinIconPainter {
@@ -53,12 +52,12 @@ class Win11IconPainter : public WinIconPainter {
   // Paints the maximize icon for the button
   void PaintMaximizeIcon(gfx::Canvas* canvas,
                          const gfx::Rect& symbol_rect,
-                         cc::PaintFlags& flags) override;
+                         const cc::PaintFlags& flags) override;
 
   // Paints the restore icon for the button
   void PaintRestoreIcon(gfx::Canvas* canvas,
                         const gfx::Rect& symbol_rect,
-                        cc::PaintFlags& flags) override;
+                        const cc::PaintFlags& flags) override;
 };
 }  // namespace electron
 

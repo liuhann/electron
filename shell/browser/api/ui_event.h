@@ -11,10 +11,12 @@ template <typename T>
 class Local;
 }  // namespace v8
 
-namespace electron::api {
+namespace electron {
+namespace api {
 
 v8::Local<v8::Object> CreateEventFromFlags(int flags);
 
-}  // namespace electron::api
+}  // namespace api
+}  // namespace electron
 
 #endif  // ELECTRON_SHELL_BROWSER_API_UI_EVENT_H_

@@ -11,9 +11,6 @@
 #include "shell/browser/ui/cocoa/root_view_mac.h"
 #include "ui/base/cocoa/window_size_constants.h"
 
-#import <objc/message.h>
-#import <objc/runtime.h>
-
 namespace electron {
 
 int ScopedDisableResize::disable_resize_ = 0;
@@ -22,94 +19,7 @@ int ScopedDisableResize::disable_resize_ = 0;
 
 @interface NSWindow (PrivateAPI)
 - (NSImage*)_cornerMask;
-- (int64_t)_resizeDirectionForMouseLocation:(CGPoint)location;
 @end
-
-// See components/remote_cocoa/app_shim/native_widget_mac_nswindow.mm
-@interface NSView (CRFrameViewAdditions)
-- (void)cr_mouseDownOnFrameView:(NSEvent*)event;
-@end
-
-typedef void (*MouseDownImpl)(id, SEL, NSEvent*);
-
-namespace {
-MouseDownImpl g_nsthemeframe_mousedown;
-MouseDownImpl g_nsnextstepframe_mousedown;
-}  // namespace
-
-// This class is never instantiated, it's just a container for our swizzled
-// mouseDown method.
-@interface SwizzledMethodsClass : NSView
-@end
-
-@implementation SwizzledMethodsClass
-- (void)swiz_nsthemeframe_mouseDown:(NSEvent*)event {
-  if ([self.window respondsToSelector:@selector(shell)]) {
-    electron::NativeWindowMac* shell =
-        (electron::NativeWindowMac*)[(id)self.window shell];
-    if (shell && !shell->has_frame())
-      [self cr_mouseDownOnFrameView:event];
-    g_nsthemeframe_mousedown(self, @selector(mouseDown:), event);
-  }
-}
-
-- (void)swiz_nsnextstepframe_mouseDown:(NSEvent*)event {
-  if ([self.window respondsToSelector:@selector(shell)]) {
-    electron::NativeWindowMac* shell =
-        (electron::NativeWindowMac*)[(id)self.window shell];
-    if (shell && !shell->has_frame()) {
-      [self cr_mouseDownOnFrameView:event];
-    }
-    g_nsnextstepframe_mousedown(self, @selector(mouseDown:), event);
-  }
-}
-
-- (void)swiz_nsview_swipeWithEvent:(NSEvent*)event {
-  if ([self.window respondsToSelector:@selector(shell)]) {
-    electron::NativeWindowMac* shell =
-        (electron::NativeWindowMac*)[(id)self.window shell];
-    if (shell) {
-      if (event.deltaY == 1.0) {
-        shell->NotifyWindowSwipe("up");
-      } else if (event.deltaX == -1.0) {
-        shell->NotifyWindowSwipe("right");
-      } else if (event.deltaY == -1.0) {
-        shell->NotifyWindowSwipe("down");
-      } else if (event.deltaX == 1.0) {
-        shell->NotifyWindowSwipe("left");
-      }
-    }
-  }
-}
-@end
-
-namespace {
-#if IS_MAS_BUILD()
-void SwizzleMouseDown(NSView* frame_view,
-                      SEL swiz_selector,
-                      MouseDownImpl* orig_impl) {
-  Method original_mousedown =
-      class_getInstanceMethod([frame_view class], @selector(mouseDown:));
-  *orig_impl = (MouseDownImpl)method_getImplementation(original_mousedown);
-  Method new_mousedown =
-      class_getInstanceMethod([SwizzledMethodsClass class], swiz_selector);
-  method_setImplementation(original_mousedown,
-                           method_getImplementation(new_mousedown));
-}
-#else
-// components/remote_cocoa/app_shim/bridged_content_view.h overrides
-// swipeWithEvent, so we can't just override the implementation
-// in ElectronNSWindow like we do with for ex. rotateWithEvent.
-void SwizzleSwipeWithEvent(NSView* view, SEL swiz_selector) {
-  Method original_swipe_with_event =
-      class_getInstanceMethod([view class], @selector(swipeWithEvent:));
-  Method new_swipe_with_event =
-      class_getInstanceMethod([SwizzledMethodsClass class], swiz_selector);
-  method_setImplementation(original_swipe_with_event,
-                           method_getImplementation(new_swipe_with_event));
-}
-#endif
-}  // namespace
 
 @implementation ElectronNSWindow
 
@@ -126,39 +36,6 @@ void SwizzleSwipeWithEvent(NSView* view, SEL swiz_selector) {
                                styleMask:styleMask
                                  backing:NSBackingStoreBuffered
                                    defer:NO])) {
-#if IS_MAS_BUILD()
-    // The first time we create a frameless window, we swizzle the
-    // implementation of -[NSNextStepFrame mouseDown:], replacing it with our
-    // own.
-    // This is only necessary on MAS where we can't directly refer to
-    // NSNextStepFrame or NSThemeFrame, as they are private APIs.
-    // See components/remote_cocoa/app_shim/native_widget_mac_nswindow.mm for
-    // the non-MAS-compatible way of doing this.
-    if (styleMask & NSWindowStyleMaskTitled) {
-      if (!g_nsthemeframe_mousedown) {
-        NSView* theme_frame = [[self contentView] superview];
-        DCHECK(strcmp(class_getName([theme_frame class]), "NSThemeFrame") == 0)
-            << "Expected NSThemeFrame but was "
-            << class_getName([theme_frame class]);
-        SwizzleMouseDown(theme_frame, @selector(swiz_nsthemeframe_mouseDown:),
-                         &g_nsthemeframe_mousedown);
-      }
-    } else {
-      if (!g_nsnextstepframe_mousedown) {
-        NSView* nextstep_frame = [[self contentView] superview];
-        DCHECK(strcmp(class_getName([nextstep_frame class]),
-                      "NSNextStepFrame") == 0)
-            << "Expected NSNextStepFrame but was "
-            << class_getName([nextstep_frame class]);
-        SwizzleMouseDown(nextstep_frame,
-                         @selector(swiz_nsnextstepframe_mouseDown:),
-                         &g_nsnextstepframe_mousedown);
-      }
-    }
-#else
-    NSView* view = [[self contentView] superview];
-    SwizzleSwipeWithEvent(view, @selector(swiz_nsview_swipeWithEvent:));
-#endif  // IS_MAS_BUILD
     shell_ = shell;
   }
   return self;
@@ -179,7 +56,7 @@ void SwizzleSwipeWithEvent(NSView* view, SEL swiz_selector) {
   return [super contentRectForFrameRect:frameRect];
 }
 
-- (NSTouchBar*)makeTouchBar {
+- (NSTouchBar*)makeTouchBar API_AVAILABLE(macosx(10.12.2)) {
   if (shell_->touch_bar())
     return [shell_->touch_bar() makeTouchBar];
   else
@@ -187,6 +64,18 @@ void SwizzleSwipeWithEvent(NSView* view, SEL swiz_selector) {
 }
 
 // NSWindow overrides.
+
+- (void)swipeWithEvent:(NSEvent*)event {
+  if (event.deltaY == 1.0) {
+    shell_->NotifyWindowSwipe("up");
+  } else if (event.deltaX == -1.0) {
+    shell_->NotifyWindowSwipe("right");
+  } else if (event.deltaY == -1.0) {
+    shell_->NotifyWindowSwipe("down");
+  } else if (event.deltaX == 1.0) {
+    shell_->NotifyWindowSwipe("left");
+  }
+}
 
 - (void)rotateWithEvent:(NSEvent*)event {
   shell_->NotifyWindowRotateGesture(event.rotation);
@@ -200,11 +89,6 @@ void SwizzleSwipeWithEvent(NSView* view, SEL swiz_selector) {
 }
 
 - (NSRect)constrainFrameRect:(NSRect)frameRect toScreen:(NSScreen*)screen {
-  // We initialize the window in headless mode to allow painting before it is
-  // shown, but we don't want the headless behavior of allowing the window to be
-  // placed unconstrained.
-  self.isHeadless = false;
-
   // Resizing is disabled.
   if (electron::ScopedDisableResize::IsResizeDisabled())
     return [self frame];
@@ -253,7 +137,7 @@ void SwizzleSwipeWithEvent(NSView* view, SEL swiz_selector) {
                                        @"NSAccessibilityReparentingCellProxy"];
 
   NSArray* children = [super accessibilityAttributeValue:attribute];
-  NSMutableArray* mutableChildren = [children mutableCopy];
+  NSMutableArray* mutableChildren = [[children mutableCopy] autorelease];
   [mutableChildren filterUsingPredicate:predicate];
 
   return mutableChildren;
@@ -301,10 +185,12 @@ void SwizzleSwipeWithEvent(NSView* view, SEL swiz_selector) {
 }
 
 - (void)beginPreviewPanelControl:(QLPreviewPanel*)panel {
+  panel.delegate = [self delegate];
   panel.dataSource = static_cast<id<QLPreviewPanelDataSource>>([self delegate]);
 }
 
 - (void)endPreviewPanelControl:(QLPreviewPanel*)panel {
+  panel.delegate = nil;
   panel.dataSource = nil;
 }
 
@@ -339,10 +225,7 @@ void SwizzleSwipeWithEvent(NSView* view, SEL swiz_selector) {
   }
 }
 
-- (BOOL)toggleFullScreenMode:(id)sender {
-  if (!shell_->has_frame() && !shell_->HasStyleMask(NSWindowStyleMaskTitled))
-    return NO;
-
+- (void)toggleFullScreenMode:(id)sender {
   bool is_simple_fs = shell_->IsSimpleFullScreen();
   bool always_simple_fs = shell_->always_simple_fullscreen();
 
@@ -371,8 +254,6 @@ void SwizzleSwipeWithEvent(NSView* view, SEL swiz_selector) {
     bool maximizable = shell_->IsMaximizable();
     shell_->SetMaximizable(maximizable);
   }
-
-  return YES;
 }
 
 - (void)performMiniaturize:(id)sender {

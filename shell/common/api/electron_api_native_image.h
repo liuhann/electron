@@ -5,11 +5,10 @@
 #ifndef ELECTRON_SHELL_COMMON_API_ELECTRON_API_NATIVE_IMAGE_H_
 #define ELECTRON_SHELL_COMMON_API_ELECTRON_API_NATIVE_IMAGE_H_
 
+#include <map>
 #include <string>
 #include <vector>
 
-#include "base/containers/flat_map.h"
-#include "base/memory/raw_ptr.h"
 #include "base/values.h"
 #include "gin/handle.h"
 #include "gin/wrappable.h"
@@ -41,7 +40,9 @@ namespace gin {
 class Arguments;
 }
 
-namespace electron::api {
+namespace electron {
+
+namespace api {
 
 class NativeImage : public gin::Wrappable<NativeImage> {
  public:
@@ -113,12 +114,12 @@ class NativeImage : public gin::Wrappable<NativeImage> {
   v8::Local<v8::Value> GetBitmap(gin::Arguments* args);
   v8::Local<v8::Value> GetNativeHandle(gin_helper::ErrorThrower thrower);
   gin::Handle<NativeImage> Resize(gin::Arguments* args,
-                                  base::Value::Dict options);
+                                  base::DictionaryValue options);
   gin::Handle<NativeImage> Crop(v8::Isolate* isolate, const gfx::Rect& rect);
   std::string ToDataURL(gin::Arguments* args);
   bool IsEmpty();
-  gfx::Size GetSize(const std::optional<float> scale_factor);
-  float GetAspectRatio(const std::optional<float> scale_factor);
+  gfx::Size GetSize(const absl::optional<float> scale_factor);
+  float GetAspectRatio(const absl::optional<float> scale_factor);
   void AddRepresentation(const gin_helper::Dictionary& options);
 
   void UpdateExternalAllocatedMemoryUsage();
@@ -130,17 +131,17 @@ class NativeImage : public gin::Wrappable<NativeImage> {
 
 #if BUILDFLAG(IS_WIN)
   base::FilePath hicon_path_;
-
-  // size -> hicon
-  base::flat_map<int, base::win::ScopedHICON> hicons_;
+  std::map<int, base::win::ScopedHICON> hicons_;
 #endif
 
   gfx::Image image_;
 
-  raw_ptr<v8::Isolate> isolate_;
+  v8::Isolate* isolate_;
   int32_t memory_usage_ = 0;
 };
 
-}  // namespace electron::api
+}  // namespace api
+
+}  // namespace electron
 
 #endif  // ELECTRON_SHELL_COMMON_API_ELECTRON_API_NATIVE_IMAGE_H_

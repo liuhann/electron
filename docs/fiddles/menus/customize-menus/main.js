@@ -6,10 +6,8 @@ const {
   ipcMain,
   app,
   shell,
-  dialog,
-  autoUpdater
-} = require('electron/main')
-const path = require('node:path')
+  dialog
+} = require('electron')
 
 const menu = new Menu()
 menu.append(new MenuItem({ label: 'Hello' }))
@@ -68,9 +66,9 @@ const template = [
             // on reload, start fresh and close any old
             // open secondary windows
             if (focusedWindow.id === 1) {
-              for (const win of BrowserWindow.getAllWindows()) {
+              BrowserWindow.getAllWindows().forEach(win => {
                 if (win.id > 1) win.close()
-              }
+              })
             }
             focusedWindow.reload()
           }
@@ -102,7 +100,7 @@ const template = [
         })(),
         click: (item, focusedWindow) => {
           if (focusedWindow) {
-            focusedWindow.webContents.toggleDevTools()
+            focusedWindow.toggleDevTools()
           }
         }
       },
@@ -187,7 +185,7 @@ function addUpdateMenuItems (items, position) {
       visible: false,
       key: 'checkForUpdate',
       click: () => {
-        autoUpdater.checkForUpdates()
+        require('electron').autoUpdater.checkForUpdates()
       }
     },
     {
@@ -196,7 +194,7 @@ function addUpdateMenuItems (items, position) {
       visible: false,
       key: 'restartToUpdate',
       click: () => {
-        autoUpdater.quitAndInstall()
+        require('electron').autoUpdater.quitAndInstall()
       }
     }
   ]
@@ -209,15 +207,15 @@ function findReopenMenuItem () {
   if (!menu) return
 
   let reopenMenuItem
-  for (const item of menu.items) {
+  menu.items.forEach(item => {
     if (item.submenu) {
-      for (const subitem of item.submenu.items) {
-        if (subitem.key === 'reopenMenuItem') {
-          reopenMenuItem = subitem
+      item.submenu.items.forEach(item => {
+        if (item.key === 'reopenMenuItem') {
+          reopenMenuItem = item
         }
-      }
+      })
     }
-  }
+  })
   return reopenMenuItem
 }
 
@@ -296,7 +294,7 @@ function createWindow () {
     width: 800,
     height: 600,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js')
+      nodeIntegration: true
     }
   })
 
@@ -312,12 +310,6 @@ function createWindow () {
     // in an array if your app supports multi windows, this is the time
     // when you should delete the corresponding element.
     mainWindow = null
-  })
-
-  // Open external links in the default browser
-  mainWindow.webContents.on('will-navigate', (event, url) => {
-    event.preventDefault()
-    shell.openExternal(url)
   })
 }
 

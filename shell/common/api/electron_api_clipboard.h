@@ -8,7 +8,6 @@
 #include <string>
 #include <vector>
 
-#include "shell/common/gin_converters/file_path_converter.h"
 #include "ui/base/clipboard/clipboard.h"
 #include "ui/gfx/image/image.h"
 #include "v8/include/v8.h"
@@ -18,7 +17,9 @@ class Arguments;
 class Dictionary;
 }  // namespace gin_helper
 
-namespace electron::api {
+namespace electron {
+
+namespace api {
 
 class Clipboard {
  public:
@@ -64,10 +65,10 @@ class Clipboard {
   static void WriteBuffer(const std::string& format_string,
                           const v8::Local<v8::Value> buffer,
                           gin_helper::Arguments* args);
-
-  static void WriteFilesForTesting(const std::vector<base::FilePath>& files);
 };
 
-}  // namespace electron::api
+}  // namespace api
+
+}  // namespace electron
 
 #endif  // ELECTRON_SHELL_COMMON_API_ELECTRON_API_CLIPBOARD_H_

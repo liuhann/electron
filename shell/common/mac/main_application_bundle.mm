@@ -3,21 +3,22 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE-CHROMIUM file.
 
-#include "shell/common/mac/main_application_bundle.h"
+#import "shell/common/mac/main_application_bundle.h"
 
-#include "base/apple/bundle_locations.h"
-#include "base/apple/foundation_util.h"
 #include "base/files/file_path.h"
+#include "base/mac/bundle_locations.h"
+#include "base/mac/foundation_util.h"
 #include "base/path_service.h"
 #include "base/strings/string_util.h"
-#include "content/browser/mac_helpers.h"
+#include "content/common/mac_helpers.h"
+#include "ppapi/buildflags/buildflags.h"
 
 namespace electron {
 
 namespace {
 
 bool HasMainProcessKey() {
-  NSDictionary* info_dictionary = [base::apple::MainBundle() infoDictionary];
+  NSDictionary* info_dictionary = [base::mac::MainBundle() infoDictionary];
   return
       [[info_dictionary objectForKey:@"ElectronMainProcess"] boolValue] != NO;
 }
@@ -31,10 +32,15 @@ base::FilePath MainApplicationBundlePath() {
 
   // Up to Contents.
   if (!HasMainProcessKey() &&
-      (path.value().ends_with(" Helper") ||
-       path.value().ends_with(content::kMacHelperSuffix_plugin) ||
-       path.value().ends_with(content::kMacHelperSuffix_renderer) ||
-       path.value().ends_with(content::kMacHelperSuffix_gpu))) {
+      (base::EndsWith(path.value(), " Helper", base::CompareCase::SENSITIVE) ||
+#if BUILDFLAG(ENABLE_PLUGINS)
+       base::EndsWith(path.value(), content::kMacHelperSuffix_plugin,
+                      base::CompareCase::SENSITIVE) ||
+#endif
+       base::EndsWith(path.value(), content::kMacHelperSuffix_renderer,
+                      base::CompareCase::SENSITIVE) ||
+       base::EndsWith(path.value(), content::kMacHelperSuffix_gpu,
+                      base::CompareCase::SENSITIVE))) {
     // The running executable is the helper. Go up five steps:
     // Contents/Frameworks/Helper.app/Contents/MacOS/Helper
     // ^ to here                                     ^ from here
@@ -53,7 +59,7 @@ base::FilePath MainApplicationBundlePath() {
 }
 
 NSBundle* MainApplicationBundle() {
-  return [NSBundle bundleWithPath:base::apple::FilePathToNSString(
+  return [NSBundle bundleWithPath:base::mac::FilePathToNSString(
                                       MainApplicationBundlePath())];
 }
 

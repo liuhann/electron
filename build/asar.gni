@@ -1,22 +1,33 @@
-template("node_action") {
-  assert(defined(invoker.script), "Need script path to run")
-  assert(defined(invoker.args), "Need script arguments")
+import("node.gni")
 
+# TODO(MarshallOfSound): Move to electron/node, this is the only place it is used now
+# Run an action with a given working directory. Behaves identically to the
+# action() target type, with the exception that it changes directory before
+# running the script.
+#
+# Parameters:
+#   cwd [required]: Directory to change to before running the script.
+template("chdir_action") {
   action(target_name) {
     forward_variables_from(invoker,
+                           "*",
                            [
-                             "deps",
-                             "public_deps",
-                             "sources",
-                             "inputs",
-                             "outputs",
+                             "script",
+                             "args",
                            ])
-    if (!defined(inputs)) {
-      inputs = []
+    assert(defined(cwd), "Need cwd in $target_name")
+    script = "//electron/build/run-in-dir.py"
+    if (defined(sources)) {
+      sources += [ invoker.script ]
+    } else {
+      assert(defined(inputs))
+      inputs += [ invoker.script ]
     }
-    inputs += [ invoker.script ]
-    script = "//electron/build/run-node.py"
-    args = [ rebase_path(invoker.script) ] + invoker.args
+    args = [
+      rebase_path(cwd),
+      rebase_path(invoker.script),
+    ]
+    args += invoker.args
   }
 }
 

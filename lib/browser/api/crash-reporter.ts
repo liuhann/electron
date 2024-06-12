@@ -1,9 +1,8 @@
-import { app } from 'electron/main';
-import * as deprecate from '@electron/internal/common/deprecate';
+import { app, deprecate } from 'electron/main';
 
 const binding = process._linkedBinding('electron_browser_crash_reporter');
 
-class CrashReporter implements Electron.CrashReporter {
+class CrashReporter {
   start (options: Electron.CrashReporterStartOptions) {
     const {
       productName = app.name,

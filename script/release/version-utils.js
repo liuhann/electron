@@ -1,7 +1,12 @@
+const path = require('path');
+const fs = require('fs');
 const semver = require('semver');
 const { GitProcess } = require('dugite');
+const { promisify } = require('util');
 
 const { ELECTRON_DIR } = require('../lib/utils');
+
+const readFile = promisify(fs.readFile);
 
 const preType = {
   NONE: 'none',
@@ -68,7 +73,8 @@ async function nextNightly (v) {
   const pre = `nightly.${getCurrentDate()}`;
 
   const branch = (await GitProcess.exec(['rev-parse', '--abbrev-ref', 'HEAD'], ELECTRON_DIR)).stdout.trim();
-  if (branch === 'main') {
+  // TODO(main-migration): Simplify once main branch is renamed
+  if (branch === 'master' || branch === 'main') {
     next = semver.inc(await getLastMajorForMain(), 'major');
   } else if (isStable(v)) {
     next = semver.inc(next, 'patch');

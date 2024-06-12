@@ -2,7 +2,7 @@
 
 const { GitProcess } = require('dugite');
 const minimist = require('minimist');
-const path = require('node:path');
+const path = require('path');
 const semver = require('semver');
 
 const { ELECTRON_DIR } = require('../../lib/utils');
@@ -76,7 +76,8 @@ const getAllBranches = async () => {
     return branches.split('\n')
       .map(branch => branch.trim())
       .filter(branch => !!branch)
-      .filter(branch => branch !== 'origin/HEAD -> origin/main')
+      // TODO(main-migration): Simplify once branch rename is complete.
+      .filter(branch => branch !== 'origin/HEAD -> origin/master' && branch !== 'origin/HEAD -> origin/main')
       .sort();
   } catch (err) {
     console.error('Failed to fetch all branches');
@@ -85,7 +86,8 @@ const getAllBranches = async () => {
 };
 
 const getStabilizationBranches = async () => {
-  return (await getAllBranches()).filter(branch => /^origin\/\d+-x-y$/.test(branch));
+  return (await getAllBranches())
+    .filter(branch => /^origin\/\d+-\d+-x$/.test(branch) || /^origin\/\d+-x-y$/.test(branch));
 };
 
 const getPreviousStabilizationBranch = async (current) => {
@@ -131,7 +133,7 @@ const getPreviousPoint = async (point) => {
     console.log('error', error);
   }
 
-  // Otherwise, use the newest stable release that precedes this branch.
+  // Otherwise, use the newest stable release that preceeds this branch.
   // To reach that you may have to walk past >1 branch, e.g. to get past
   // 2-1-x which never had a stable release.
   let branch = currentBranch;
@@ -145,7 +147,7 @@ const getPreviousPoint = async (point) => {
   }
 };
 
-async function getReleaseNotes (range, newVersion, unique) {
+async function getReleaseNotes (range, newVersion) {
   const rangeList = range.split('..') || ['HEAD'];
   const to = rangeList.pop();
   const from = rangeList.pop() || (await getPreviousPoint(to));
@@ -156,7 +158,7 @@ async function getReleaseNotes (range, newVersion, unique) {
 
   const notes = await notesGenerator.get(from, to, newVersion);
   const ret = {
-    text: notesGenerator.render(notes, unique)
+    text: notesGenerator.render(notes)
   };
 
   if (notes.unknown.length) {
@@ -168,7 +170,7 @@ async function getReleaseNotes (range, newVersion, unique) {
 
 async function main () {
   const opts = minimist(process.argv.slice(2), {
-    boolean: ['help', 'unique'],
+    boolean: ['help'],
     string: ['version']
   });
   opts.range = opts._.shift();
@@ -177,14 +179,13 @@ async function main () {
     console.log(`
 easy usage: ${name} version
 
-full usage: ${name} [begin..]end [--version version] [--unique]
+full usage: ${name} [begin..]end [--version version]
 
  * 'begin' and 'end' are two git references -- tags, branches, etc --
    from which the release notes are generated.
  * if omitted, 'begin' defaults to the previous tag in end's branch.
  * if omitted, 'version' defaults to 'end'. Specifying a version is
    useful if you're making notes on a new version that isn't tagged yet.
- * '--unique' omits changes that also landed in other branches.
 
 For example, these invocations are equivalent:
   ${process.argv[1]} v4.0.1
@@ -193,14 +194,14 @@ For example, these invocations are equivalent:
     return 0;
   }
 
-  const notes = await getReleaseNotes(opts.range, opts.version, opts.unique);
+  const notes = await getReleaseNotes(opts.range, opts.version);
   console.log(notes.text);
   if (notes.warning) {
     throw new Error(notes.warning);
   }
 }
 
-if (require.main === module) {
+if (process.mainModule === module) {
   main().catch((err) => {
     console.error('Error Occurred:', err);
     process.exit(1);

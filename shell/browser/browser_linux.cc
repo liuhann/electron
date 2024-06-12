@@ -11,12 +11,9 @@
 #include "base/environment.h"
 #include "base/process/launch.h"
 #include "electron/electron_version.h"
-#include "shell/browser/javascript_environment.h"
 #include "shell/browser/native_window.h"
 #include "shell/browser/window_list.h"
 #include "shell/common/application_info.h"
-#include "shell/common/gin_converters/login_item_settings_converter.h"
-#include "shell/common/thread_restrictions.h"
 
 #if BUILDFLAG(IS_LINUX)
 #include "shell/browser/linux/unity_service.h"
@@ -25,15 +22,16 @@
 
 namespace electron {
 
-namespace {
-
 const char kXdgSettings[] = "xdg-settings";
 const char kXdgSettingsDefaultSchemeHandler[] = "default-url-scheme-handler";
 
 // The use of the ForTesting flavors is a hack workaround to avoid having to
 // patch these as friends into the associated guard classes.
-class [[maybe_unused, nodiscard]] LaunchXdgUtilityScopedAllowBaseSyncPrimitives
+class LaunchXdgUtilityScopedAllowBaseSyncPrimitives
     : public base::ScopedAllowBaseSyncPrimitivesForTesting {};
+
+class GetXdgAppOutputScopedAllowBlocking
+    : public base::ScopedAllowBlockingForTesting {};
 
 bool LaunchXdgUtility(const std::vector<std::string>& argv, int* exit_code) {
   *exit_code = EXIT_FAILURE;
@@ -53,18 +51,18 @@ bool LaunchXdgUtility(const std::vector<std::string>& argv, int* exit_code) {
   return process.WaitForExit(exit_code);
 }
 
-std::optional<std::string> GetXdgAppOutput(
+absl::optional<std::string> GetXdgAppOutput(
     const std::vector<std::string>& argv) {
   std::string reply;
   int success_code;
-  ScopedAllowBlockingForElectron allow_blocking;
+  GetXdgAppOutputScopedAllowBlocking allow_blocking;
   bool ran_ok = base::GetAppOutputWithExitCode(base::CommandLine(argv), &reply,
                                                &success_code);
 
   if (!ran_ok || success_code != EXIT_SUCCESS)
-    return std::optional<std::string>();
+    return absl::optional<std::string>();
 
-  return std::make_optional(reply);
+  return absl::make_optional(reply);
 }
 
 bool SetDefaultWebClient(const std::string& protocol) {
@@ -85,8 +83,6 @@ bool SetDefaultWebClient(const std::string& protocol) {
   bool ran_ok = LaunchXdgUtility(argv, &exit_code);
   return ran_ok && exit_code == EXIT_SUCCESS;
 }
-
-}  // namespace
 
 void Browser::AddRecentDocument(const base::FilePath& path) {}
 
@@ -110,9 +106,12 @@ bool Browser::IsDefaultProtocolClient(const std::string& protocol,
   const std::vector<std::string> argv = {kXdgSettings, "check",
                                          kXdgSettingsDefaultSchemeHandler,
                                          protocol, desktop_name};
+  const auto output = GetXdgAppOutput(argv);
+  if (!output)
+    return false;
+
   // Allow any reply that starts with "yes".
-  const std::optional<std::string> output = GetXdgAppOutput(argv);
-  return output && output->starts_with("yes");
+  return base::StartsWith(output.value(), "yes", base::CompareCase::SENSITIVE);
 }
 
 // Todo implement
@@ -129,7 +128,7 @@ std::u16string Browser::GetApplicationNameForProtocol(const GURL& url) {
   return base::ASCIIToUTF16(GetXdgAppOutput(argv).value_or(std::string()));
 }
 
-bool Browser::SetBadgeCount(std::optional<int> count) {
+bool Browser::SetBadgeCount(absl::optional<int> count) {
   if (IsUnityRunning() && count.has_value()) {
     unity::SetDownloadCount(count.value());
     badge_count_ = count.value();
@@ -141,10 +140,9 @@ bool Browser::SetBadgeCount(std::optional<int> count) {
 
 void Browser::SetLoginItemSettings(LoginItemSettings settings) {}
 
-v8::Local<v8::Value> Browser::GetLoginItemSettings(
+Browser::LoginItemSettings Browser::GetLoginItemSettings(
     const LoginItemSettings& options) {
-  LoginItemSettings settings;
-  return gin::ConvertToV8(JavascriptEnvironment::GetIsolate(), settings);
+  return LoginItemSettings();
 }
 
 std::string Browser::GetExecutableFileVersion() const {
@@ -166,25 +164,31 @@ bool Browser::IsEmojiPanelSupported() {
 void Browser::ShowAboutPanel() {
   const auto& opts = about_panel_options_;
 
+  if (!opts.is_dict()) {
+    LOG(WARNING) << "Called showAboutPanel(), but didn't use "
+                    "setAboutPanelSettings() first";
+    return;
+  }
+
   GtkWidget* dialogWidget = gtk_about_dialog_new();
   GtkAboutDialog* dialog = GTK_ABOUT_DIALOG(dialogWidget);
 
   const std::string* str;
-  const base::Value::List* list;
+  const base::Value* val;
 
-  if ((str = opts.FindString("applicationName"))) {
+  if ((str = opts.FindStringKey("applicationName"))) {
     gtk_about_dialog_set_program_name(dialog, str->c_str());
   }
-  if ((str = opts.FindString("applicationVersion"))) {
+  if ((str = opts.FindStringKey("applicationVersion"))) {
     gtk_about_dialog_set_version(dialog, str->c_str());
   }
-  if ((str = opts.FindString("copyright"))) {
+  if ((str = opts.FindStringKey("copyright"))) {
     gtk_about_dialog_set_copyright(dialog, str->c_str());
   }
-  if ((str = opts.FindString("website"))) {
+  if ((str = opts.FindStringKey("website"))) {
     gtk_about_dialog_set_website(dialog, str->c_str());
   }
-  if ((str = opts.FindString("iconPath"))) {
+  if ((str = opts.FindStringKey("iconPath"))) {
     GError* error = nullptr;
     constexpr int width = 64;   // width of about panel icon in pixels
     constexpr int height = 64;  // height of about panel icon in pixels
@@ -201,9 +205,9 @@ void Browser::ShowAboutPanel() {
     }
   }
 
-  if ((list = opts.FindList("authors"))) {
+  if ((val = opts.FindListKey("authors"))) {
     std::vector<const char*> cstrs;
-    for (const auto& authorVal : *list) {
+    for (const auto& authorVal : val->GetListDeprecated()) {
       if (authorVal.is_string()) {
         cstrs.push_back(authorVal.GetString().c_str());
       }
@@ -216,14 +220,11 @@ void Browser::ShowAboutPanel() {
     }
   }
 
-  // destroy the widget when it closes
-  g_signal_connect_swapped(dialogWidget, "response",
-                           G_CALLBACK(gtk_widget_destroy), dialogWidget);
-
-  gtk_widget_show_all(dialogWidget);
+  gtk_dialog_run(GTK_DIALOG(dialog));
+  gtk_widget_destroy(dialogWidget);
 }
 
-void Browser::SetAboutPanelOptions(base::Value::Dict options) {
+void Browser::SetAboutPanelOptions(base::DictionaryValue options) {
   about_panel_options_ = std::move(options);
 }
 

@@ -5,9 +5,9 @@
 #ifndef ELECTRON_SHELL_BROWSER_UI_COCOA_EVENT_DISPATCHING_WINDOW_H_
 #define ELECTRON_SHELL_BROWSER_UI_COCOA_EVENT_DISPATCHING_WINDOW_H_
 
-#import <Cocoa/Cocoa.h>
+#import "ui/base/cocoa/underlay_opengl_hosting_window.h"
 
-@interface EventDispatchingWindow : NSWindow {
+@interface EventDispatchingWindow : UnderlayOpenGLHostingWindow {
  @private
   BOOL redispatchingEvent_;
 }

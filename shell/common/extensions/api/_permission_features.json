@@ -6,32 +6,18 @@
     ],
     "location": "component"
   },
-  "pdfViewerPrivate": {
-    "channel": "stable",
-    "extension_types": [
-      "extension"
-    ],
-    "allowlist": [
-      "CBCC42ABED43A4B58FE3810E62AFFA010EB0349F"
-    ]
-  },
   "management": {
     "channel": "stable",
     "extension_types": [
       "extension"
     ]
   },
-  "tabs": {
+  "cryptotokenPrivate": {
     "channel": "stable",
-    "extension_types": [
-      "extension"
+    "extension_types": ["extension"],
+    "location": "component",
+    "allowlist": [
+      "E24F1786D842E91E74C27929B0B3715A4689A473"  // Cryptotoken
     ]
-  },
-  "scripting": {
-    "channel": "stable",
-    "extension_types": [
-      "extension"
-    ],
-    "min_manifest_version": 3
   }
 }

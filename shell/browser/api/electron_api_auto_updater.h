@@ -13,12 +13,14 @@
 #include "shell/browser/event_emitter_mixin.h"
 #include "shell/browser/window_list_observer.h"
 
-namespace electron::api {
+namespace electron {
+
+namespace api {
 
 class AutoUpdater : public gin::Wrappable<AutoUpdater>,
                     public gin_helper::EventEmitterMixin<AutoUpdater>,
                     public auto_updater::Delegate,
-                    private WindowListObserver {
+                    public WindowListObserver {
  public:
   static gin::Handle<AutoUpdater> Create(v8::Isolate* isolate);
 
@@ -54,9 +56,12 @@ class AutoUpdater : public gin::Wrappable<AutoUpdater>,
 
  private:
   std::string GetFeedURL();
+  void SetFeedURL(gin::Arguments* args);
   void QuitAndInstall();
 };
 
-}  // namespace electron::api
+}  // namespace api
+
+}  // namespace electron
 
 #endif  // ELECTRON_SHELL_BROWSER_API_ELECTRON_API_AUTO_UPDATER_H_

@@ -9,6 +9,7 @@
 
 #include <string>
 
+#include "base/mac/scoped_nsobject.h"
 #include "shell/browser/ui/tray_icon.h"
 
 @class ElectronMenuController;
@@ -28,23 +29,19 @@ class TrayIconCocoa : public TrayIcon {
   std::string GetTitle() override;
   void SetIgnoreDoubleClickEvents(bool ignore) override;
   bool GetIgnoreDoubleClickEvents() override;
-  void PopUpOnUI(base::WeakPtr<ElectronMenuModel> menu_model);
+  void PopUpOnUI(ElectronMenuModel* menu_model);
   void PopUpContextMenu(const gfx::Point& pos,
-                        base::WeakPtr<ElectronMenuModel> menu_model) override;
+                        ElectronMenuModel* menu_model) override;
   void CloseContextMenu() override;
-  void SetContextMenu(raw_ptr<ElectronMenuModel> menu_model) override;
+  void SetContextMenu(ElectronMenuModel* menu_model) override;
   gfx::Rect GetBounds() override;
-
-  base::WeakPtr<TrayIconCocoa> GetWeakPtr() {
-    return weak_factory_.GetWeakPtr();
-  }
 
  private:
   // Electron custom view for NSStatusItem.
-  StatusItemView* __strong status_item_view_;
+  base::scoped_nsobject<StatusItemView> status_item_view_;
 
   // Status menu shown when right-clicking the system icon.
-  ElectronMenuController* __strong menu_;
+  base::scoped_nsobject<ElectronMenuController> menu_;
 
   base::WeakPtrFactory<TrayIconCocoa> weak_factory_{this};
 };

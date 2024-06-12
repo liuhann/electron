@@ -8,8 +8,16 @@ export interface GuestViewDelegate {
   dispatchEvent (eventName: string, props: Record<string, any>): void;
 }
 
+const DEPRECATED_EVENTS: Record<string, string> = {
+  'page-title-updated': 'page-title-set'
+} as const;
+
 export function registerEvents (viewInstanceId: number, delegate: GuestViewDelegate) {
   ipcRendererInternal.on(`${IPC_MESSAGES.GUEST_VIEW_INTERNAL_DISPATCH_EVENT}-${viewInstanceId}`, function (event, eventName, props) {
+    if (DEPRECATED_EVENTS[eventName] != null) {
+      delegate.dispatchEvent(DEPRECATED_EVENTS[eventName], props);
+    }
+
     delegate.dispatchEvent(eventName, props);
   });
 }
@@ -20,7 +28,7 @@ export function deregisterEvents (viewInstanceId: number) {
 
 export function createGuest (iframe: HTMLIFrameElement, elementInstanceId: number, params: Record<string, any>): Promise<number> {
   if (!(iframe instanceof HTMLIFrameElement)) {
-    throw new TypeError('Invalid embedder frame');
+    throw new Error('Invalid embedder frame');
   }
 
   const embedderFrameId = webFrame.getWebFrameId(iframe.contentWindow!);

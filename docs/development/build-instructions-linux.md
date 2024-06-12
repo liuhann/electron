@@ -47,10 +47,10 @@ $ sudo yum install clang dbus-devel gtk3-devel libnotify-devel \
 On Fedora, install the following libraries:
 
 ```sh
-$ sudo dnf install clang dbus-devel gperf gtk3-devel \
-                   libnotify-devel libgnome-keyring-devel libcap-devel \
+$ sudo dnf install clang dbus-devel gtk3-devel libnotify-devel \
+                   libgnome-keyring-devel xorg-x11-server-utils libcap-devel \
                    cups-devel libXtst-devel alsa-lib-devel libXrandr-devel \
-                   nss-devel python-dbusmock
+                   nss-devel python-dbusmock openjdk-8-jre
 ```
 
 On Arch Linux / Manjaro, install the following libraries:

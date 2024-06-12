@@ -8,6 +8,7 @@
 #include <string>
 #include <utility>
 
+#include "base/lazy_instance.h"
 #include "base/logging.h"
 #include "extensions/browser/media_capture_util.h"
 #include "shell/browser/api/electron_api_web_contents.h"
@@ -36,13 +37,14 @@ ElectronExtensionHostDelegate::GetJavaScriptDialogManager() {
   // TODO(jamescook): Create a JavaScriptDialogManager or reuse the one from
   // content_shell.
   NOTREACHED();
+  return nullptr;
 }
 
 void ElectronExtensionHostDelegate::CreateTab(
     std::unique_ptr<content::WebContents> web_contents,
     const std::string& extension_id,
     WindowOpenDisposition disposition,
-    const blink::mojom::WindowFeatures& window_features,
+    const gfx::Rect& initial_rect,
     bool user_gesture) {
   // TODO(jamescook): Should app_shell support opening popup windows?
   NOTREACHED();
@@ -60,7 +62,7 @@ void ElectronExtensionHostDelegate::ProcessMediaAccessRequest(
 
 bool ElectronExtensionHostDelegate::CheckMediaAccessPermission(
     content::RenderFrameHost* render_frame_host,
-    const url::Origin& security_origin,
+    const GURL& security_origin,
     blink::mojom::MediaStreamType type,
     const Extension* extension) {
   media_capture_util::VerifyMediaAccessPermission(type, extension);
@@ -71,6 +73,7 @@ content::PictureInPictureResult
 ElectronExtensionHostDelegate::EnterPictureInPicture(
     content::WebContents* web_contents) {
   NOTREACHED();
+  return content::PictureInPictureResult();
 }
 
 void ElectronExtensionHostDelegate::ExitPictureInPicture() {

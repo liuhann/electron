@@ -10,6 +10,7 @@
 #include "shell/common/gin_converters/file_path_converter.h"
 #include "shell/common/gin_helper/dictionary.h"
 #include "shell/common/node_includes.h"
+#include "shell/common/node_util.h"
 
 namespace {
 
@@ -38,7 +39,7 @@ class Archive : public node::ObjectWrap {
   Archive& operator=(const Archive&) = delete;
 
  protected:
-  explicit Archive(std::shared_ptr<asar::Archive> archive)
+  explicit Archive(std::unique_ptr<asar::Archive> archive)
       : archive_(std::move(archive)) {}
 
   static void New(const v8::FunctionCallbackInfo<v8::Value>& args) {
@@ -51,8 +52,8 @@ class Archive : public node::ObjectWrap {
       return;
     }
 
-    std::shared_ptr<asar::Archive> archive = asar::GetOrCreateAsarArchive(path);
-    if (!archive) {
+    auto archive = std::make_unique<asar::Archive>(path);
+    if (!archive->Init()) {
       isolate->ThrowException(v8::Exception::Error(node::FIXED_ONE_BYTE_STRING(
           isolate, "failed to initialize archive")));
       return;
@@ -88,10 +89,10 @@ class Archive : public node::ObjectWrap {
       gin_helper::Dictionary integrity(isolate, v8::Object::New(isolate));
       asar::HashAlgorithm algorithm = info.integrity.value().algorithm;
       switch (algorithm) {
-        case asar::HashAlgorithm::kSHA256:
+        case asar::HashAlgorithm::SHA256:
           integrity.Set("algorithm", "SHA256");
           break;
-        case asar::HashAlgorithm::kNone:
+        case asar::HashAlgorithm::NONE:
           CHECK(false);
           break;
       }
@@ -120,7 +121,9 @@ class Archive : public node::ObjectWrap {
     gin_helper::Dictionary dict(isolate, v8::Object::New(isolate));
     dict.Set("size", stats.size);
     dict.Set("offset", stats.offset);
-    dict.Set("type", static_cast<int>(stats.type));
+    dict.Set("isFile", stats.is_file);
+    dict.Set("isDirectory", stats.is_directory);
+    dict.Set("isLink", stats.is_link);
     args.GetReturnValue().Set(dict.GetHandle());
   }
 
@@ -187,8 +190,21 @@ class Archive : public node::ObjectWrap {
         isolate, wrap->archive_ ? wrap->archive_->GetUnsafeFD() : -1));
   }
 
-  std::shared_ptr<asar::Archive> archive_;
+  std::unique_ptr<asar::Archive> archive_;
 };
+
+static void InitAsarSupport(const v8::FunctionCallbackInfo<v8::Value>& args) {
+  auto* isolate = args.GetIsolate();
+  auto require = args[0];
+
+  // Evaluate asar_bundle.js.
+  std::vector<v8::Local<v8::String>> asar_bundle_params = {
+      node::FIXED_ONE_BYTE_STRING(isolate, "require")};
+  std::vector<v8::Local<v8::Value>> asar_bundle_args = {require};
+  electron::util::CompileAndCall(
+      isolate->GetCurrentContext(), "electron/js2c/asar_bundle",
+      &asar_bundle_params, &asar_bundle_args, nullptr);
+}
 
 static void SplitPath(const v8::FunctionCallbackInfo<v8::Value>& args) {
   auto* isolate = args.GetIsolate();
@@ -199,7 +215,7 @@ static void SplitPath(const v8::FunctionCallbackInfo<v8::Value>& args) {
     return;
   }
 
-  auto dict = gin_helper::Dictionary::CreateEmpty(isolate);
+  gin_helper::Dictionary dict = gin::Dictionary::CreateEmpty(isolate);
   base::FilePath asar_path, file_path;
   if (asar::GetAsarArchivePath(path, &asar_path, &file_path, true)) {
     dict.Set("isAsar", true);
@@ -225,8 +241,9 @@ void Initialize(v8::Local<v8::Object> exports,
   exports->Set(context, node::FIXED_ONE_BYTE_STRING(isolate, "Archive"), cons)
       .Check();
   NODE_SET_METHOD(exports, "splitPath", &SplitPath);
+  NODE_SET_METHOD(exports, "initAsarSupport", &InitAsarSupport);
 }
 
 }  // namespace
 
-NODE_LINKED_BINDING_CONTEXT_AWARE(electron_common_asar, Initialize)
+NODE_LINKED_MODULE_CONTEXT_AWARE(electron_common_asar, Initialize)

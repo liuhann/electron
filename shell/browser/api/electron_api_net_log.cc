@@ -7,9 +7,10 @@
 #include <string>
 #include <utility>
 
+#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
-#include "base/functional/bind.h"
+#include "base/task/task_runner_util.h"
 #include "base/task/thread_pool.h"
 #include "chrome/browser/browser_process.h"
 #include "components/net_log/chrome_net_log.h"
@@ -125,7 +126,7 @@ v8::Local<v8::Promise> NetLog::StartLogging(base::FilePath log_path,
   }
 
   pending_start_promise_ =
-      std::make_optional<gin_helper::Promise<void>>(args->isolate());
+      absl::make_optional<gin_helper::Promise<void>>(args->isolate());
   v8::Local<v8::Promise> handle = pending_start_promise_->GetHandle();
 
   auto command_line_string =
@@ -142,8 +143,9 @@ v8::Local<v8::Promise> NetLog::StartLogging(base::FilePath log_path,
   net_log_exporter_.set_disconnect_handler(
       base::BindOnce(&NetLog::OnConnectionError, base::Unretained(this)));
 
-  file_task_runner_->PostTaskAndReplyWithResult(
-      FROM_HERE, base::BindOnce(OpenFileForWriting, log_path),
+  base::PostTaskAndReplyWithResult(
+      file_task_runner_.get(), FROM_HERE,
+      base::BindOnce(OpenFileForWriting, log_path),
       base::BindOnce(&NetLog::StartNetLogAfterCreateFile,
                      weak_ptr_factory_.GetWeakPtr(), capture_mode,
                      max_file_size, std::move(custom_constants)));

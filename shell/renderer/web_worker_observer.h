@@ -7,14 +7,7 @@
 
 #include <memory>
 
-#include "base/containers/flat_set.h"
 #include "v8/include/v8.h"
-
-namespace node {
-
-class Environment;
-
-}  // namespace node
 
 namespace electron {
 
@@ -24,13 +17,8 @@ class NodeBindings;
 // Watches for WebWorker and insert node integration to it.
 class WebWorkerObserver {
  public:
-  WebWorkerObserver();
-  ~WebWorkerObserver();
-
   // Returns the WebWorkerObserver for current worker thread.
   static WebWorkerObserver* GetCurrent();
-  // Creates a new WebWorkerObserver for a given context.
-  static WebWorkerObserver* Create();
 
   // disable copy
   WebWorkerObserver(const WebWorkerObserver&) = delete;
@@ -40,9 +28,11 @@ class WebWorkerObserver {
   void ContextWillDestroy(v8::Local<v8::Context> context);
 
  private:
+  WebWorkerObserver();
+  ~WebWorkerObserver();
+
   std::unique_ptr<NodeBindings> node_bindings_;
   std::unique_ptr<ElectronBindings> electron_bindings_;
-  base::flat_set<std::shared_ptr<node::Environment>> environments_;
 };
 
 }  // namespace electron

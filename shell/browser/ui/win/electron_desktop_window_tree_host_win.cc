@@ -4,8 +4,6 @@
 
 #include "shell/browser/ui/win/electron_desktop_window_tree_host_win.h"
 
-#include <optional>
-
 #include "base/win/windows_version.h"
 #include "electron/buildflags/buildflags.h"
 #include "shell/browser/ui/views/win_frame_view.h"
@@ -40,11 +38,19 @@ bool ElectronDesktopWindowTreeHostWin::PreHandleMSG(UINT message,
 }
 
 bool ElectronDesktopWindowTreeHostWin::ShouldPaintAsActive() const {
-  if (force_should_paint_as_active_.has_value()) {
-    return force_should_paint_as_active_.value();
-  }
+  // Tell Chromium to use system default behavior when rendering inactive
+  // titlebar, otherwise it would render inactive titlebar as active under
+  // some cases.
+  // See also https://github.com/electron/electron/issues/24647.
+  return false;
+}
 
-  return views::DesktopWindowTreeHostWin::ShouldPaintAsActive();
+bool ElectronDesktopWindowTreeHostWin::HasNativeFrame() const {
+  // Since we never use chromium's titlebar implementation, we can just say
+  // that we use a native titlebar. This will disable the repaint locking when
+  // DWM composition is disabled.
+  // See also https://github.com/electron/electron/issues/1821.
+  return !ui::win::IsAeroGlassEnabled();
 }
 
 bool ElectronDesktopWindowTreeHostWin::GetDwmFrameInsetsInPixels(
@@ -70,7 +76,7 @@ bool ElectronDesktopWindowTreeHostWin::GetDwmFrameInsetsInPixels(
 bool ElectronDesktopWindowTreeHostWin::GetClientAreaInsets(
     gfx::Insets* insets,
     HMONITOR monitor) const {
-  // Windows by default extends the maximized window slightly larger than
+  // Windows by deafult extends the maximized window slightly larger than
   // current workspace, for frameless window since the standard frame has been
   // removed, the client area would then be drew outside current workspace.
   //
@@ -112,36 +118,7 @@ bool ElectronDesktopWindowTreeHostWin::HandleMouseEventForCaption(
 
 void ElectronDesktopWindowTreeHostWin::OnNativeThemeUpdated(
     ui::NativeTheme* observed_theme) {
-  HWND hWnd = GetAcceleratedWidget();
-  win::SetDarkModeForWindow(hWnd);
-
-  auto* os_info = base::win::OSInfo::GetInstance();
-  auto const version = os_info->version();
-
-  // Toggle the nonclient area active state to force a redraw (Win10 workaround)
-  if (version < base::win::Version::WIN11) {
-    // When handling WM_NCACTIVATE messages, Chromium logical ORs the wParam and
-    // the value of ShouldPaintAsActive() - so if the latter is true, it's not
-    // possible to toggle the title bar to inactive. Force it to false while we
-    // send the message so that the wParam value will always take effect. Refs
-    // https://source.chromium.org/chromium/chromium/src/+/main:ui/views/win/hwnd_message_handler.cc;l=2332-2381;drc=e6361d070be0adc585ebbff89fec76e2df4ad768
-    force_should_paint_as_active_ = false;
-    ::SendMessage(hWnd, WM_NCACTIVATE, hWnd != ::GetActiveWindow(), 0);
-
-    // Clear forced value and tell Chromium the value changed to get a repaint
-    force_should_paint_as_active_.reset();
-    PaintAsActiveChanged();
-  }
-}
-
-bool ElectronDesktopWindowTreeHostWin::ShouldWindowContentsBeTransparent()
-    const {
-  // Window should be marked as opaque if no transparency setting has been
-  // set, otherwise animations or videos rendered in the window will trigger a
-  // DirectComposition redraw for every frame.
-  // https://github.com/electron/electron/pull/39895
-  return native_window_view_->GetOpacity() < 1.0 ||
-         native_window_view_->IsTranslucent();
+  win::SetDarkModeForWindow(GetAcceleratedWidget());
 }
 
 }  // namespace electron

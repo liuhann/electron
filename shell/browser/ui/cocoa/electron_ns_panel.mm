@@ -17,7 +17,7 @@
 }
 
 @dynamic styleMask;
-// The Nonactivating mask is reserved for NSPanel,
+// The Nonactivating mask is reserverd for NSPanel,
 // but we can use this workaround to add it at runtime
 - (NSWindowStyleMask)styleMask {
   return originalStyleMask | NSWindowStyleMaskNonactivatingPanel;

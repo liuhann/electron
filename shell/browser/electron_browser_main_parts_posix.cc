@@ -4,7 +4,6 @@
 
 // Most code came from: chrome/browser/chrome_browser_main_posix.cc.
 
-#include "base/notreached.h"
 #include "shell/browser/electron_browser_main_parts.h"
 
 #include <errno.h>
@@ -140,11 +139,11 @@ void ShutdownDetector::ThreadMain() {
         read(shutdown_fd_, reinterpret_cast<char*>(&signal) + bytes_read,
              sizeof(signal) - bytes_read));
     if (ret < 0) {
-      NOTREACHED_IN_MIGRATION() << "Unexpected error: " << strerror(errno);
+      NOTREACHED() << "Unexpected error: " << strerror(errno);
       ShutdownFDReadError();
       break;
     } else if (ret == 0) {
-      NOTREACHED_IN_MIGRATION() << "Unexpected closure of shutdown pipe.";
+      NOTREACHED() << "Unexpected closure of shutdown pipe.";
       ShutdownFDClosedError();
       break;
     }

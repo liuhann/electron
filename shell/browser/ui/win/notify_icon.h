@@ -13,7 +13,6 @@
 #include <string>
 
 #include "base/compiler_specific.h"
-#include "base/memory/weak_ptr.h"
 #include "base/win/scoped_gdi_object.h"
 #include "shell/browser/ui/tray_icon.h"
 #include "shell/browser/ui/win/notify_icon_host.h"
@@ -45,13 +44,10 @@ class NotifyIcon : public TrayIcon {
   // otherwise displays the context menu if there is one.
   void HandleClickEvent(int modifiers,
                         bool left_button_click,
-                        bool double_button_click,
-                        bool middle_button_click);
+                        bool double_button_click);
 
   // Handles a mouse move event from the user.
   void HandleMouseMoveEvent(int modifiers);
-  void HandleMouseEntered(int modifiers);
-  void HandleMouseExited(int modifiers);
 
   // Re-creates the status tray icon now after the taskbar has been created.
   void ResetIcon();
@@ -69,9 +65,9 @@ class NotifyIcon : public TrayIcon {
   void RemoveBalloon() override;
   void Focus() override;
   void PopUpContextMenu(const gfx::Point& pos,
-                        base::WeakPtr<ElectronMenuModel> menu_model) override;
+                        ElectronMenuModel* menu_model) override;
   void CloseContextMenu() override;
-  void SetContextMenu(raw_ptr<ElectronMenuModel> menu_model) override;
+  void SetContextMenu(ElectronMenuModel* menu_model) override;
   gfx::Rect GetBounds() override;
 
   base::WeakPtr<NotifyIcon> GetWeakPtr() { return weak_factory_.GetWeakPtr(); }
@@ -80,7 +76,7 @@ class NotifyIcon : public TrayIcon {
   void InitIconData(NOTIFYICONDATA* icon_data);
 
   // The tray that owns us.  Weak.
-  raw_ptr<NotifyIconHost> host_;
+  NotifyIconHost* host_;
 
   // The unique ID corresponding to this icon.
   UINT icon_id_;
@@ -95,7 +91,7 @@ class NotifyIcon : public TrayIcon {
   base::win::ScopedHICON icon_;
 
   // The context menu.
-  raw_ptr<ElectronMenuModel> menu_model_ = nullptr;
+  ElectronMenuModel* menu_model_ = nullptr;
 
   // An optional GUID used for identifying tray entries on Windows
   GUID guid_ = GUID_DEFAULT;

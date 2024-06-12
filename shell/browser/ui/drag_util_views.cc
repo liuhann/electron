@@ -21,11 +21,7 @@ namespace electron {
 void DragFileItems(const std::vector<base::FilePath>& files,
                    const gfx::Image& icon,
                    gfx::NativeView view) {
-  aura::Window* root_window = view->GetRootWindow();
-  if (!root_window || !aura::client::GetDragDropClient(root_window))
-    return;
-
-  // Set up our OLE machinery.
+  // Set up our OLE machinery
   auto data = std::make_unique<ui::OSExchangeData>();
 
   button_drag_utils::SetDragImage(GURL(), files[0].LossyDisplayName(),
@@ -37,6 +33,10 @@ void DragFileItems(const std::vector<base::FilePath>& files,
     file_infos.emplace_back(file, base::FilePath());
   }
   data->SetFilenames(file_infos);
+
+  aura::Window* root_window = view->GetRootWindow();
+  if (!root_window || !aura::client::GetDragDropClient(root_window))
+    return;
 
   gfx::Point location = display::Screen::GetScreen()->GetCursorScreenPoint();
   // TODO(varunjain): Properly determine and send DragEventSource below.

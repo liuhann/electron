@@ -7,8 +7,7 @@
 
 #include <string>
 
-#include "base/functional/callback.h"
-#include "base/memory/raw_ptr.h"
+#include "base/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/power_monitor/power_observer.h"
 #include "dbus/bus.h"
@@ -43,7 +42,7 @@ class PowerObserverLinux {
                          bool success);
 
   base::RepeatingCallback<bool()> should_shutdown_;
-  raw_ptr<base::PowerSuspendObserver> suspend_observer_ = nullptr;
+  base::PowerSuspendObserver* suspend_observer_ = nullptr;
 
   scoped_refptr<dbus::ObjectProxy> logind_;
   std::string lock_owner_name_;

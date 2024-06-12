@@ -22,6 +22,7 @@
 #include "base/win/registry.h"
 #include "shell/browser/native_window_views.h"
 #include "shell/browser/ui/win/dialog_thread.h"
+#include "shell/browser/unresponsive_suppressor.h"
 #include "shell/common/gin_converters/file_path_converter.h"
 
 namespace file_dialog {
@@ -68,9 +69,9 @@ static HRESULT GetFileNameFromShellItem(IShellItem* pShellItem,
                                         SIGDN type,
                                         LPWSTR lpstr,
                                         size_t cchLength) {
-  assert(pShellItem != nullptr);
+  assert(pShellItem != NULL);
 
-  LPWSTR lpstrName = nullptr;
+  LPWSTR lpstrName = NULL;
   HRESULT hRet = pShellItem->GetDisplayName(type, &lpstrName);
 
   if (SUCCEEDED(hRet)) {
@@ -78,6 +79,7 @@ static HRESULT GetFileNameFromShellItem(IShellItem* pShellItem,
       wcscpy_s(lpstr, cchLength, lpstrName);
     } else {
       NOTREACHED();
+      hRet = DISP_E_BUFFERTOOSMALL;
     }
 
     ::CoTaskMemFree(lpstrName);
@@ -92,7 +94,7 @@ static void SetDefaultFolder(IFileDialog* dialog,
       IsDirectory(file_path) ? file_path.value() : file_path.DirName().value();
 
   ATL::CComPtr<IShellItem> folder_item;
-  HRESULT hr = SHCreateItemFromParsingName(directory.c_str(), nullptr,
+  HRESULT hr = SHCreateItemFromParsingName(directory.c_str(), NULL,
                                            IID_PPV_ARGS(&folder_item));
   if (SUCCEEDED(hr))
     dialog->SetFolder(folder_item);
@@ -100,11 +102,12 @@ static void SetDefaultFolder(IFileDialog* dialog,
 
 static HRESULT ShowFileDialog(IFileDialog* dialog,
                               const DialogSettings& settings) {
+  electron::UnresponsiveSuppressor suppressor;
   HWND parent_window =
       settings.parent_window
           ? static_cast<electron::NativeWindowViews*>(settings.parent_window)
                 ->GetAcceleratedWidget()
-          : nullptr;
+          : NULL;
 
   return dialog->Show(parent_window);
 }
@@ -219,7 +222,7 @@ void ShowOpenDialog(const DialogSettings& settings,
   auto done = [](gin_helper::Promise<gin_helper::Dictionary> promise,
                  bool success, std::vector<base::FilePath> result) {
     v8::HandleScope handle_scope(promise.isolate());
-    auto dict = gin::Dictionary::CreateEmpty(promise.isolate());
+    gin::Dictionary dict = gin::Dictionary::CreateEmpty(promise.isolate());
     dict.Set("canceled", !success);
     dict.Set("filePaths", result);
     promise.Resolve(dict);
@@ -268,7 +271,7 @@ void ShowSaveDialog(const DialogSettings& settings,
   auto done = [](gin_helper::Promise<gin_helper::Dictionary> promise,
                  bool success, base::FilePath result) {
     v8::HandleScope handle_scope(promise.isolate());
-    auto dict = gin::Dictionary::CreateEmpty(promise.isolate());
+    gin::Dictionary dict = gin::Dictionary::CreateEmpty(promise.isolate());
     dict.Set("canceled", !success);
     dict.Set("filePath", result);
     promise.Resolve(dict);

@@ -5,26 +5,23 @@
 #ifndef ELECTRON_SHELL_COMMON_GIN_CONVERTERS_VALUE_CONVERTER_H_
 #define ELECTRON_SHELL_COMMON_GIN_CONVERTERS_VALUE_CONVERTER_H_
 
-#include "base/values.h"
 #include "gin/converter.h"
+
+namespace base {
+class DictionaryValue;
+class ListValue;
+class Value;
+}  // namespace base
 
 namespace gin {
 
 template <>
-struct Converter<base::ValueView> {
-  static v8::Local<v8::Value> ToV8(v8::Isolate* isolate,
-                                   const base::ValueView val);
-};
-
-template <>
-struct Converter<base::Value::Dict> {
+struct Converter<base::DictionaryValue> {
   static bool FromV8(v8::Isolate* isolate,
                      v8::Local<v8::Value> val,
-                     base::Value::Dict* out);
+                     base::DictionaryValue* out);
   static v8::Local<v8::Value> ToV8(v8::Isolate* isolate,
-                                   const base::Value::Dict& val) {
-    return gin::ConvertToV8(isolate, base::ValueView{val});
-  }
+                                   const base::DictionaryValue& val);
 };
 
 template <>
@@ -33,20 +30,16 @@ struct Converter<base::Value> {
                      v8::Local<v8::Value> val,
                      base::Value* out);
   static v8::Local<v8::Value> ToV8(v8::Isolate* isolate,
-                                   const base::Value& val) {
-    return gin::ConvertToV8(isolate, base::ValueView{val});
-  }
+                                   const base::Value& val);
 };
 
 template <>
-struct Converter<base::Value::List> {
+struct Converter<base::ListValue> {
   static bool FromV8(v8::Isolate* isolate,
                      v8::Local<v8::Value> val,
-                     base::Value::List* out);
+                     base::ListValue* out);
   static v8::Local<v8::Value> ToV8(v8::Isolate* isolate,
-                                   const base::Value::List& val) {
-    return gin::ConvertToV8(isolate, base::ValueView{val});
-  }
+                                   const base::ListValue& val);
 };
 
 }  // namespace gin

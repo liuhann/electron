@@ -1,5 +1,5 @@
 const { app } = require('electron');
-const net = require('node:net');
+const net = require('net');
 
 const socketPath = process.platform === 'win32' ? '\\\\.\\pipe\\electron-app-relaunch' : '/tmp/electron-app-relaunch';
 

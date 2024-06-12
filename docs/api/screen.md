@@ -14,29 +14,20 @@ property, so writing `let { screen } = require('electron')` will not work.
 
 An example of creating a window that fills the whole screen:
 
-```fiddle docs/fiddles/screen/fit-screen
-// Retrieve information about screen size, displays, cursor position, etc.
-//
-// For more info, see:
-// https://www.electronjs.org/docs/latest/api/screen
+```javascript fiddle='docs/fiddles/screen/fit-screen'
+const { app, BrowserWindow, screen } = require('electron')
 
-const { app, BrowserWindow, screen } = require('electron/main')
-
-let mainWindow = null
-
+let win
 app.whenReady().then(() => {
-  // Create a window that fills the screen's available work area.
-  const primaryDisplay = screen.getPrimaryDisplay()
-  const { width, height } = primaryDisplay.workAreaSize
-
-  mainWindow = new BrowserWindow({ width, height })
-  mainWindow.loadURL('https://electronjs.org')
+  const { width, height } = screen.getPrimaryDisplay().workAreaSize
+  win = new BrowserWindow({ width, height })
+  win.loadURL('https://github.com')
 })
 ```
 
 Another example of creating a window in the external display:
 
-```js
+```javascript
 const { app, BrowserWindow, screen } = require('electron')
 
 let win

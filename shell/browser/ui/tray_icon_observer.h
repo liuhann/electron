@@ -23,7 +23,6 @@ class TrayIconObserver : public base::CheckedObserver {
                          const gfx::Point& location,
                          int modifiers) {}
   virtual void OnDoubleClicked(const gfx::Rect& bounds, int modifiers) {}
-  virtual void OnMiddleClicked(const gfx::Rect& bounds, int modifiers) {}
   virtual void OnBalloonShow() {}
   virtual void OnBalloonClicked() {}
   virtual void OnBalloonClosed() {}

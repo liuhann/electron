@@ -14,11 +14,12 @@
 namespace {
 
 bool HasSwitch(const std::string& name) {
-  return base::CommandLine::ForCurrentProcess()->HasSwitch(name);
+  return base::CommandLine::ForCurrentProcess()->HasSwitch(name.c_str());
 }
 
 base::CommandLine::StringType GetSwitchValue(const std::string& name) {
-  return base::CommandLine::ForCurrentProcess()->GetSwitchValueNative(name);
+  return base::CommandLine::ForCurrentProcess()->GetSwitchValueNative(
+      name.c_str());
 }
 
 void AppendSwitch(const std::string& switch_string,
@@ -66,4 +67,4 @@ void Initialize(v8::Local<v8::Object> exports,
 
 }  // namespace
 
-NODE_LINKED_BINDING_CONTEXT_AWARE(electron_common_command_line, Initialize)
+NODE_LINKED_MODULE_CONTEXT_AWARE(electron_common_command_line, Initialize)

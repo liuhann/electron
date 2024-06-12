@@ -7,7 +7,6 @@
 
 #include <vector>
 
-#include "base/memory/raw_ptr.h"
 #include "content/public/browser/render_frame_host.h"
 #include "shell/browser/ui/views/autofill_popup_view.h"
 #include "ui/color/color_id.h"
@@ -19,7 +18,7 @@ namespace electron {
 
 class AutofillPopupView;
 
-class AutofillPopup : private views::ViewObserver {
+class AutofillPopup : public views::ViewObserver {
  public:
   AutofillPopup();
   ~AutofillPopup() override;
@@ -57,9 +56,9 @@ class AutofillPopup : private views::ViewObserver {
   const gfx::FontList& GetLabelFontListForRow(int index) const;
   ui::ColorId GetBackgroundColorIDForRow(int index) const;
 
-  int line_count() const { return values_.size(); }
-  const std::u16string& value_at(int i) const { return values_.at(i); }
-  const std::u16string& label_at(int i) const { return labels_.at(i); }
+  int GetLineCount();
+  std::u16string GetValueAt(int i);
+  std::u16string GetLabelAt(int i);
   int LineFromY(int y) const;
 
   int selected_index_;
@@ -80,13 +79,13 @@ class AutofillPopup : private views::ViewObserver {
 
   // For sending the accepted suggestion to the render frame that
   // asked to open the popup
-  raw_ptr<content::RenderFrameHost> frame_host_ = nullptr;
+  content::RenderFrameHost* frame_host_ = nullptr;
 
   // The popup view. The lifetime is managed by the owning Widget
-  raw_ptr<AutofillPopupView> view_ = nullptr;
+  AutofillPopupView* view_ = nullptr;
 
   // The parent view that the popup view shows on. Weak ref.
-  raw_ptr<views::View> parent_ = nullptr;
+  views::View* parent_ = nullptr;
 };
 
 }  // namespace electron

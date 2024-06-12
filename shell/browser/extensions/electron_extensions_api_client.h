@@ -27,7 +27,8 @@ class ElectronExtensionsAPIClient : public ExtensionsAPIClient {
       MimeHandlerViewGuest* guest) const override;
   ManagementAPIDelegate* CreateManagementAPIDelegate() const override;
   std::unique_ptr<guest_view::GuestViewManagerDelegate>
-  CreateGuestViewManagerDelegate() const override;
+  CreateGuestViewManagerDelegate(
+      content::BrowserContext* context) const override;
 
  private:
   std::unique_ptr<ElectronMessagingDelegate> messaging_delegate_;

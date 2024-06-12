@@ -11,7 +11,7 @@
 
 // This class listens for Pepper creation events from the RenderFrame and
 // attaches the parts required for plugin support.
-class PepperHelper : private content::RenderFrameObserver {
+class PepperHelper : public content::RenderFrameObserver {
  public:
   explicit PepperHelper(content::RenderFrame* render_frame);
   ~PepperHelper() override;
@@ -20,7 +20,6 @@ class PepperHelper : private content::RenderFrameObserver {
   PepperHelper(const PepperHelper&) = delete;
   PepperHelper& operator=(const PepperHelper&) = delete;
 
- private:
   // RenderFrameObserver.
   void DidCreatePepperPlugin(content::RendererPpapiHost* host) override;
   void OnDestruct() override;

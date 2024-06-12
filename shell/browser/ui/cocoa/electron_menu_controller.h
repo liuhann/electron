@@ -8,7 +8,8 @@
 
 #import <Cocoa/Cocoa.h>
 
-#include "base/functional/callback.h"
+#include "base/callback.h"
+#include "base/mac/scoped_nsobject.h"
 #include "base/memory/weak_ptr.h"
 
 namespace electron {
@@ -25,7 +26,7 @@ class ElectronMenuModel;
     : NSObject <NSMenuDelegate, NSSharingServiceDelegate> {
  @protected
   base::WeakPtr<electron::ElectronMenuModel> model_;
-  NSMenu* __strong menu_;
+  base::scoped_nsobject<NSMenu> menu_;
   BOOL isMenuOpen_;
   BOOL useDefaultAccelerator_;
   base::OnceClosure closeCallback;
@@ -51,8 +52,9 @@ class ElectronMenuModel;
 // default initializer was used, then this will create the menu on first call.
 - (NSMenu*)menu;
 
-- (NSMenuItem*)makeMenuItemForIndex:(NSInteger)index
-                          fromModel:(electron::ElectronMenuModel*)model;
+- (base::scoped_nsobject<NSMenuItem>)
+    makeMenuItemForIndex:(NSInteger)index
+               fromModel:(electron::ElectronMenuModel*)model;
 
 // Whether the menu is currently open.
 - (BOOL)isMenuOpen;

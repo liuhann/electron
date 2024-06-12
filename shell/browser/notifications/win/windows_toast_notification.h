@@ -13,6 +13,7 @@
 #include <windows.ui.notifications.h>
 #include <wrl/implements.h>
 #include <string>
+#include <vector>
 
 #include "shell/browser/notifications/notification.h"
 
@@ -52,7 +53,6 @@ class WindowsToastNotification : public Notification {
   // Notification:
   void Show(const NotificationOptions& options) override;
   void Dismiss() override;
-  void Remove() override;
 
  private:
   friend class ToastEventHandler;

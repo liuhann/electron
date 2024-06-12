@@ -16,7 +16,6 @@
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/mojom/fetch_api.mojom.h"
-#include "url/origin.h"
 
 class PrefService;
 
@@ -49,24 +48,13 @@ class ElectronExtensionsBrowserClient
   bool IsShuttingDown() override;
   bool AreExtensionsDisabled(const base::CommandLine& command_line,
                              content::BrowserContext* context) override;
-  bool IsValidContext(void* context) override;
+  bool IsValidContext(content::BrowserContext* context) override;
   bool IsSameContext(content::BrowserContext* first,
                      content::BrowserContext* second) override;
   bool HasOffTheRecordContext(content::BrowserContext* context) override;
   content::BrowserContext* GetOffTheRecordContext(
       content::BrowserContext* context) override;
   content::BrowserContext* GetOriginalContext(
-      content::BrowserContext* context) override;
-  content::BrowserContext* GetContextRedirectedToOriginal(
-      content::BrowserContext* context,
-      bool force_guest_profile) override;
-  content::BrowserContext* GetContextOwnInstance(
-      content::BrowserContext* context,
-      bool force_guest_profile) override;
-  content::BrowserContext* GetContextForOriginalOnly(
-      content::BrowserContext* context,
-      bool force_guest_profile) override;
-  bool AreExtensionsDisabledForContext(
       content::BrowserContext* context) override;
   bool IsGuestSession(content::BrowserContext* context) const override;
   bool IsExtensionIncognitoEnabled(
@@ -103,11 +91,6 @@ class ElectronExtensionsBrowserClient
       const override;
   extensions::ProcessManagerDelegate* GetProcessManagerDelegate()
       const override;
-  mojo::PendingRemote<network::mojom::URLLoaderFactory>
-  GetControlledFrameEmbedderURLLoader(
-      const url::Origin& app_origin,
-      int frame_tree_node_id,
-      content::BrowserContext* browser_context) override;
   std::unique_ptr<extensions::ExtensionHostDelegate>
   CreateExtensionHostDelegate() override;
   bool DidVersionUpdate(content::BrowserContext* context) override;

@@ -17,7 +17,9 @@
 #include "ui/gfx/image/image.h"
 #include "ui/gfx/skbitmap_operations.h"
 
-namespace electron::api {
+namespace electron {
+
+namespace api {
 
 constexpr static int kMaxFrameRate = 30;
 
@@ -27,7 +29,9 @@ FrameSubscriber::FrameSubscriber(content::WebContents* web_contents,
     : content::WebContentsObserver(web_contents),
       callback_(callback),
       only_dirty_(only_dirty) {
-  AttachToHost(web_contents->GetPrimaryMainFrame()->GetRenderWidgetHost());
+  content::RenderViewHost* rvh = web_contents->GetRenderViewHost();
+  if (rvh)
+    AttachToHost(rvh->GetWidget());
 }
 
 FrameSubscriber::~FrameSubscriber() = default;
@@ -42,7 +46,6 @@ void FrameSubscriber::AttachToHost(content::RenderWidgetHost* host) {
 
   // Create and configure the video capturer.
   gfx::Size size = GetRenderViewSize();
-  DCHECK(!size.IsEmpty());
   video_capturer_ = host_->GetView()->CreateVideoCapturer();
   video_capturer_->SetResolutionConstraints(size, size, true);
   video_capturer_->SetAutoThrottlingEnabled(false);
@@ -71,11 +74,11 @@ void FrameSubscriber::RenderViewDeleted(content::RenderViewHost* host) {
   }
 }
 
-void FrameSubscriber::PrimaryPageChanged(content::Page& page) {
-  if (auto* host = page.GetMainDocument().GetMainFrame()->GetRenderWidgetHost();
-      host_ != host) {
+void FrameSubscriber::RenderViewHostChanged(content::RenderViewHost* old_host,
+                                            content::RenderViewHost* new_host) {
+  if ((old_host && old_host->GetWidget() == host_) || (!old_host && !host_)) {
     DetachFromHost();
-    AttachToHost(host);
+    AttachToHost(new_host->GetWidget());
   }
 }
 
@@ -131,7 +134,7 @@ void FrameSubscriber::OnFrameCaptured(
       SkImageInfo::MakeN32(content_rect.width(), content_rect.height(),
                            kPremul_SkAlphaType),
       pixels,
-      media::VideoFrame::RowBytes(media::VideoFrame::Plane::kARGB,
+      media::VideoFrame::RowBytes(media::VideoFrame::kARGBPlane,
                                   info->pixel_format, info->coded_size.width()),
       [](void* addr, void* context) {
         delete static_cast<FramePinner*>(context);
@@ -141,8 +144,6 @@ void FrameSubscriber::OnFrameCaptured(
 
   Done(content_rect, bitmap);
 }
-
-void FrameSubscriber::OnNewSubCaptureTargetVersion(uint32_t crop_version) {}
 
 void FrameSubscriber::OnFrameWithEmptyRegionCapture() {}
 
@@ -179,4 +180,6 @@ gfx::Size FrameSubscriber::GetRenderViewSize() const {
       gfx::ScaleSize(gfx::SizeF(size), view->GetDeviceScaleFactor()));
 }
 
-}  // namespace electron::api
+}  // namespace api
+
+}  // namespace electron

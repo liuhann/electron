@@ -25,21 +25,10 @@ blink::WebInputEvent::Type GetWebInputEventType(v8::Isolate* isolate,
                                                 v8::Local<v8::Value> val);
 
 template <>
-struct Converter<blink::WebInputEvent::Type> {
-  static bool FromV8(v8::Isolate* isolate,
-                     v8::Local<v8::Value> val,
-                     blink::WebInputEvent::Type* out);
-  static v8::Local<v8::Value> ToV8(v8::Isolate* isolate,
-                                   const blink::WebInputEvent::Type& in);
-};
-
-template <>
 struct Converter<blink::WebInputEvent> {
   static bool FromV8(v8::Isolate* isolate,
                      v8::Local<v8::Value> val,
                      blink::WebInputEvent* out);
-  static v8::Local<v8::Value> ToV8(v8::Isolate* isolate,
-                                   const blink::WebInputEvent& in);
 };
 
 template <>
@@ -80,10 +69,10 @@ struct Converter<blink::mojom::ContextMenuDataMediaType> {
 };
 
 template <>
-struct Converter<std::optional<blink::mojom::FormControlType>> {
+struct Converter<blink::mojom::ContextMenuDataInputFieldType> {
   static v8::Local<v8::Value> ToV8(
       v8::Isolate* isolate,
-      const std::optional<blink::mojom::FormControlType>& in);
+      const blink::mojom::ContextMenuDataInputFieldType& in);
 };
 
 template <>

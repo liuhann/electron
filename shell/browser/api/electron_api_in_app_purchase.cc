@@ -20,7 +20,8 @@ struct Converter<in_app_purchase::PaymentDiscount> {
   static v8::Local<v8::Value> ToV8(
       v8::Isolate* isolate,
       const in_app_purchase::PaymentDiscount& paymentDiscount) {
-    auto dict = gin_helper::Dictionary::CreateEmpty(isolate);
+    gin_helper::Dictionary dict = gin::Dictionary::CreateEmpty(isolate);
+    dict.SetHidden("simple", true);
     dict.Set("identifier", paymentDiscount.identifier);
     dict.Set("keyIdentifier", paymentDiscount.keyIdentifier);
     dict.Set("nonce", paymentDiscount.nonce);
@@ -34,7 +35,8 @@ template <>
 struct Converter<in_app_purchase::Payment> {
   static v8::Local<v8::Value> ToV8(v8::Isolate* isolate,
                                    const in_app_purchase::Payment& payment) {
-    auto dict = gin_helper::Dictionary::CreateEmpty(isolate);
+    gin_helper::Dictionary dict = gin::Dictionary::CreateEmpty(isolate);
+    dict.SetHidden("simple", true);
     dict.Set("productIdentifier", payment.productIdentifier);
     dict.Set("quantity", payment.quantity);
     dict.Set("applicationUsername", payment.applicationUsername);
@@ -49,7 +51,8 @@ template <>
 struct Converter<in_app_purchase::Transaction> {
   static v8::Local<v8::Value> ToV8(v8::Isolate* isolate,
                                    const in_app_purchase::Transaction& val) {
-    auto dict = gin_helper::Dictionary::CreateEmpty(isolate);
+    gin_helper::Dictionary dict = gin::Dictionary::CreateEmpty(isolate);
+    dict.SetHidden("simple", true);
     dict.Set("transactionIdentifier", val.transactionIdentifier);
     dict.Set("transactionDate", val.transactionDate);
     dict.Set("originalTransactionIdentifier",
@@ -68,7 +71,8 @@ struct Converter<in_app_purchase::ProductSubscriptionPeriod> {
       v8::Isolate* isolate,
       const in_app_purchase::ProductSubscriptionPeriod&
           productSubscriptionPeriod) {
-    auto dict = gin_helper::Dictionary::CreateEmpty(isolate);
+    gin_helper::Dictionary dict = gin::Dictionary::CreateEmpty(isolate);
+    dict.SetHidden("simple", true);
     dict.Set("numberOfUnits", productSubscriptionPeriod.numberOfUnits);
     dict.Set("unit", productSubscriptionPeriod.unit);
     return dict.GetHandle();
@@ -80,7 +84,8 @@ struct Converter<in_app_purchase::ProductDiscount> {
   static v8::Local<v8::Value> ToV8(
       v8::Isolate* isolate,
       const in_app_purchase::ProductDiscount& productDiscount) {
-    auto dict = gin_helper::Dictionary::CreateEmpty(isolate);
+    gin_helper::Dictionary dict = gin::Dictionary::CreateEmpty(isolate);
+    dict.SetHidden("simple", true);
     dict.Set("identifier", productDiscount.identifier);
     dict.Set("type", productDiscount.type);
     dict.Set("price", productDiscount.price);
@@ -99,10 +104,13 @@ template <>
 struct Converter<in_app_purchase::Product> {
   static v8::Local<v8::Value> ToV8(v8::Isolate* isolate,
                                    const in_app_purchase::Product& val) {
-    auto dict = gin_helper::Dictionary::CreateEmpty(isolate);
+    gin_helper::Dictionary dict = gin::Dictionary::CreateEmpty(isolate);
+    dict.SetHidden("simple", true);
     dict.Set("productIdentifier", val.productIdentifier);
     dict.Set("localizedDescription", val.localizedDescription);
     dict.Set("localizedTitle", val.localizedTitle);
+    dict.Set("contentVersion", val.contentVersion);
+    dict.Set("contentLengths", val.contentLengths);
 
     // Pricing Information
     dict.Set("price", val.price);
@@ -127,7 +135,9 @@ struct Converter<in_app_purchase::Product> {
 
 }  // namespace gin
 
-namespace electron::api {
+namespace electron {
+
+namespace api {
 
 gin::WrapperInfo InAppPurchase::kWrapperInfo = {gin::kEmbedderNativeGin};
 
@@ -170,11 +180,9 @@ v8::Local<v8::Promise> InAppPurchase::PurchaseProduct(
 
   int quantity = 1;
   args->GetNext(&quantity);
-  std::string username = "";
-  args->GetNext(&username);
 
   in_app_purchase::PurchaseProduct(
-      product_id, quantity, username,
+      product_id, quantity,
       base::BindOnce(gin_helper::Promise<bool>::ResolvePromise,
                      std::move(promise)));
 
@@ -203,7 +211,9 @@ void InAppPurchase::OnTransactionsUpdated(
 }
 #endif
 
-}  // namespace electron::api
+}  // namespace api
+
+}  // namespace electron
 
 namespace {
 
@@ -222,4 +232,4 @@ void Initialize(v8::Local<v8::Object> exports,
 
 }  // namespace
 
-NODE_LINKED_BINDING_CONTEXT_AWARE(electron_browser_in_app_purchase, Initialize)
+NODE_LINKED_MODULE_CONTEXT_AWARE(electron_browser_in_app_purchase, Initialize)

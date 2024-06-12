@@ -5,9 +5,6 @@
 #ifndef ELECTRON_SHELL_COMMON_GIN_HELPER_OBJECT_TEMPLATE_BUILDER_H_
 #define ELECTRON_SHELL_COMMON_GIN_HELPER_OBJECT_TEMPLATE_BUILDER_H_
 
-#include <string_view>
-
-#include "base/memory/raw_ptr.h"
 #include "shell/common/gin_helper/function_template.h"
 
 namespace gin_helper {
@@ -30,7 +27,7 @@ class ObjectTemplateBuilder {
   // poetic license here in order that all calls to Set() can be via the '.'
   // operator and line up nicely.
   template <typename T>
-  ObjectTemplateBuilder& SetValue(const std::string_view name, T val) {
+  ObjectTemplateBuilder& SetValue(const base::StringPiece& name, T val) {
     return SetImpl(name, ConvertToV8(isolate_, val));
   }
 
@@ -39,19 +36,19 @@ class ObjectTemplateBuilder {
   // will want to use one of the first two options. Also see
   // gin::CreateFunctionTemplate() for creating raw function templates.
   template <typename T>
-  ObjectTemplateBuilder& SetMethod(const std::string_view name,
+  ObjectTemplateBuilder& SetMethod(const base::StringPiece& name,
                                    const T& callback) {
     return SetImpl(name, CallbackTraits<T>::CreateTemplate(isolate_, callback));
   }
   template <typename T>
-  ObjectTemplateBuilder& SetProperty(const std::string_view name,
+  ObjectTemplateBuilder& SetProperty(const base::StringPiece& name,
                                      const T& getter) {
     return SetPropertyImpl(name,
                            CallbackTraits<T>::CreateTemplate(isolate_, getter),
                            v8::Local<v8::FunctionTemplate>());
   }
   template <typename T, typename U>
-  ObjectTemplateBuilder& SetProperty(const std::string_view name,
+  ObjectTemplateBuilder& SetProperty(const base::StringPiece& name,
                                      const T& getter,
                                      const U& setter) {
     return SetPropertyImpl(name,
@@ -62,14 +59,14 @@ class ObjectTemplateBuilder {
   v8::Local<v8::ObjectTemplate> Build();
 
  private:
-  ObjectTemplateBuilder& SetImpl(const std::string_view name,
+  ObjectTemplateBuilder& SetImpl(const base::StringPiece& name,
                                  v8::Local<v8::Data> val);
   ObjectTemplateBuilder& SetPropertyImpl(
-      const std::string_view name,
+      const base::StringPiece& name,
       v8::Local<v8::FunctionTemplate> getter,
       v8::Local<v8::FunctionTemplate> setter);
 
-  raw_ptr<v8::Isolate> isolate_;
+  v8::Isolate* isolate_;
 
   // ObjectTemplateBuilder should only be used on the stack.
   v8::Local<v8::ObjectTemplate> template_;

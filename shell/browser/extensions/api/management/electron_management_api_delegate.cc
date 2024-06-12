@@ -9,7 +9,7 @@
 #include <string>
 #include <utility>
 
-#include "base/functional/bind.h"
+#include "base/bind.h"
 #include "base/strings/strcat.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
@@ -78,17 +78,12 @@ ElectronManagementAPIDelegate::ElectronManagementAPIDelegate() = default;
 
 ElectronManagementAPIDelegate::~ElectronManagementAPIDelegate() = default;
 
-bool ElectronManagementAPIDelegate::LaunchAppFunctionDelegate(
+void ElectronManagementAPIDelegate::LaunchAppFunctionDelegate(
     const extensions::Extension* extension,
     content::BrowserContext* context) const {
-  // Note: Chromium looks for an existing profile and determines whether
-  // the user has set a launch preference
-  // See: https://chromium-review.googlesource.com/c/chromium/src/+/4389621
-  // For Electron, this should always return the default (true).
   // TODO(sentialx): emit event
   extensions::RecordAppLaunchType(extension_misc::APP_LAUNCH_EXTENSION_API,
                                   extension->GetType());
-  return true;
 }
 
 GURL ElectronManagementAPIDelegate::GetFullLaunchURL(
@@ -101,6 +96,18 @@ extensions::LaunchType ElectronManagementAPIDelegate::GetLaunchType(
     const extensions::Extension* extension) const {
   // TODO(sentialx)
   return extensions::LAUNCH_TYPE_DEFAULT;
+}
+
+void ElectronManagementAPIDelegate::
+    GetPermissionWarningsByManifestFunctionDelegate(
+        extensions::ManagementGetPermissionWarningsByManifestFunction* function,
+        const std::string& manifest_str) const {
+  data_decoder::DataDecoder::ParseJsonIsolated(
+      manifest_str,
+      base::BindOnce(
+          &extensions::ManagementGetPermissionWarningsByManifestFunction::
+              OnParse,
+          function));
 }
 
 std::unique_ptr<extensions::InstallPromptDelegate>
@@ -152,9 +159,26 @@ void ElectronManagementAPIDelegate::InstallOrLaunchReplacementWebApp(
   // TODO(sentialx)
 }
 
+bool ElectronManagementAPIDelegate::CanContextInstallAndroidApps(
+    content::BrowserContext* context) const {
+  return false;
+}
+
+void ElectronManagementAPIDelegate::CheckAndroidAppInstallStatus(
+    const std::string& package_name,
+    AndroidAppInstallStatusCallback callback) const {
+  std::move(callback).Run(false);
+}
+
+void ElectronManagementAPIDelegate::InstallReplacementAndroidApp(
+    const std::string& package_name,
+    InstallAndroidAppCallback callback) const {
+  std::move(callback).Run(false);
+}
+
 void ElectronManagementAPIDelegate::EnableExtension(
     content::BrowserContext* context,
-    const extensions::ExtensionId& extension_id) const {
+    const std::string& extension_id) const {
   // const extensions::Extension* extension =
   //     extensions::ExtensionRegistry::Get(context)->GetExtensionById(
   //         extension_id, extensions::ExtensionRegistry::EVERYTHING);
@@ -171,7 +195,7 @@ void ElectronManagementAPIDelegate::EnableExtension(
 void ElectronManagementAPIDelegate::DisableExtension(
     content::BrowserContext* context,
     const extensions::Extension* source_extension,
-    const extensions::ExtensionId& extension_id,
+    const std::string& extension_id,
     extensions::disable_reason::DisableReason disable_reason) const {
   // TODO(sentialx): we don't have ExtensionService
   // extensions::ExtensionSystem::Get(context)
@@ -182,7 +206,7 @@ void ElectronManagementAPIDelegate::DisableExtension(
 
 bool ElectronManagementAPIDelegate::UninstallExtension(
     content::BrowserContext* context,
-    const extensions::ExtensionId& transient_extension_id,
+    const std::string& transient_extension_id,
     extensions::UninstallReason reason,
     std::u16string* error) const {
   // TODO(sentialx): we don't have ExtensionService
@@ -194,7 +218,7 @@ bool ElectronManagementAPIDelegate::UninstallExtension(
 
 void ElectronManagementAPIDelegate::SetLaunchType(
     content::BrowserContext* context,
-    const extensions::ExtensionId& extension_id,
+    const std::string& extension_id,
     extensions::LaunchType launch_type) const {
   // TODO(sentialx)
   // extensions::SetLaunchType(context, extension_id, launch_type);
@@ -203,12 +227,12 @@ void ElectronManagementAPIDelegate::SetLaunchType(
 GURL ElectronManagementAPIDelegate::GetIconURL(
     const extensions::Extension* extension,
     int icon_size,
-    ExtensionIconSet::Match match,
+    ExtensionIconSet::MatchType match,
     bool grayscale) const {
-  GURL icon_url(base::StringPrintf(
-      "%s%s/%d/%d%s", chrome::kChromeUIExtensionIconURL,
-      extension->id().c_str(), icon_size, static_cast<int>(match),
-      grayscale ? "?grayscale=true" : ""));
+  GURL icon_url(base::StringPrintf("%s%s/%d/%d%s",
+                                   chrome::kChromeUIExtensionIconURL,
+                                   extension->id().c_str(), icon_size, match,
+                                   grayscale ? "?grayscale=true" : ""));
   CHECK(icon_url.is_valid());
   return icon_url;
 }

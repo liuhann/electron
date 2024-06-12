@@ -46,8 +46,7 @@ std::unique_ptr<WinIconPainter> WinCaptionButton::CreateIconPainter() {
   return std::make_unique<WinIconPainter>();
 }
 
-gfx::Size WinCaptionButton::CalculatePreferredSize(
-    const views::SizeBounds& available_size) const {
+gfx::Size WinCaptionButton::CalculatePreferredSize() const {
   // TODO(bsep): The sizes in this function are for 1x device scale and don't
   // match Windows button sizes at hidpi.
 
@@ -121,7 +120,7 @@ int WinCaptionButton::GetBetweenButtonSpacing() const {
   const int display_order_index = GetButtonDisplayOrderIndex();
   return display_order_index == 0
              ? 0
-             : WindowFrameUtil::kWindowsCaptionButtonVisualSpacing;
+             : WindowFrameUtil::kWindows10GlassCaptionButtonVisualSpacing;
 }
 
 int WinCaptionButton::GetButtonDisplayOrderIndex() const {
@@ -139,6 +138,7 @@ int WinCaptionButton::GetButtonDisplayOrderIndex() const {
       break;
     default:
       NOTREACHED();
+      return 0;
   }
 
   // Reverse the ordering if we're in RTL mode
@@ -163,7 +163,7 @@ void WinCaptionButton::PaintSymbol(gfx::Canvas* canvas) {
   gfx::ScopedCanvas scoped_canvas(canvas);
   const float scale = canvas->UndoDeviceScaleFactor();
 
-  const int symbol_size_pixels = base::ClampRound(10 * scale);
+  const int symbol_size_pixels = std::round(10 * scale);
   gfx::RectF bounds_rect(GetContentsBounds());
   bounds_rect.Scale(scale);
   gfx::Rect symbol_rect(gfx::ToEnclosingRect(bounds_rect));
@@ -174,7 +174,8 @@ void WinCaptionButton::PaintSymbol(gfx::Canvas* canvas) {
   flags.setAntiAlias(false);
   flags.setColor(symbol_color);
   flags.setStyle(cc::PaintFlags::kStroke_Style);
-  const int stroke_width = base::ClampRound(scale);
+  // Stroke width jumps up a pixel every time we reach a new integral scale.
+  const int stroke_width = std::floor(scale);
   flags.setStrokeWidth(stroke_width);
 
   switch (button_type_) {
@@ -207,10 +208,7 @@ void WinCaptionButton::PaintSymbol(gfx::Canvas* canvas) {
 
     default:
       NOTREACHED();
+      return;
   }
 }
-
-BEGIN_METADATA(WinCaptionButton)
-END_METADATA
-
 }  // namespace electron

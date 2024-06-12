@@ -10,7 +10,7 @@ patch may be merged upstream, at which point this patch should be
 removed.
 
 diff --git a/net/url_request/static_http_user_agent_settings.h b/net/url_request/static_http_user_agent_settings.h
-index 0ab8187b0db8ae6db46d81738f653a2bc4c566f6..de3d55e85c22317f7f9375eb94d0d5d41b0dbd3b 100644
+index 14c71cc69388da46f62d9835e2a06fef0870da02..9481ea08401ae29ae9c1d960491b05b364257cc8 100644
 --- a/net/url_request/static_http_user_agent_settings.h
 +++ b/net/url_request/static_http_user_agent_settings.h
 @@ -30,13 +30,17 @@ class NET_EXPORT StaticHttpUserAgentSettings : public HttpUserAgentSettings {
@@ -33,10 +33,10 @@ index 0ab8187b0db8ae6db46d81738f653a2bc4c566f6..de3d55e85c22317f7f9375eb94d0d5d4
  
  }  // namespace net
 diff --git a/services/network/network_context.cc b/services/network/network_context.cc
-index 50650759734c7ef4d683d61560caba01da6aa113..4c766a23c03350b7056c27070b79beacb07e94d4 100644
+index c90733c3f463a2b9a3f142a739061fa65d6905b8..372c00c77c4320847313bdba49ade7ae8ed3f699 100644
 --- a/services/network/network_context.cc
 +++ b/services/network/network_context.cc
-@@ -1671,6 +1671,13 @@ void NetworkContext::SetNetworkConditions(
+@@ -1414,6 +1414,13 @@ void NetworkContext::SetNetworkConditions(
                                        std::move(network_conditions));
  }
  
@@ -51,22 +51,22 @@ index 50650759734c7ef4d683d61560caba01da6aa113..4c766a23c03350b7056c27070b79beac
    // This may only be called on NetworkContexts created with the constructor
    // that calls MakeURLRequestContext().
 diff --git a/services/network/network_context.h b/services/network/network_context.h
-index 004354b6a74023adebc041c2f40d8989eb9f0a05..106567ae61d404ee20d552bd51caeea1f830aba7 100644
+index dd79f2c9fabf673d9e2c69830ef3513cb499d961..f7744a9610c669e53eb9ba4fe4f3bf48715a77ba 100644
 --- a/services/network/network_context.h
 +++ b/services/network/network_context.h
-@@ -319,6 +319,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkContext
+@@ -299,6 +299,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkContext
    void CloseIdleConnections(CloseIdleConnectionsCallback callback) override;
    void SetNetworkConditions(const base::UnguessableToken& throttling_profile_id,
                              mojom::NetworkConditionsPtr conditions) override;
 +  void SetUserAgent(const std::string& new_user_agent) override;
    void SetAcceptLanguage(const std::string& new_accept_language) override;
    void SetEnableReferrers(bool enable_referrers) override;
- #if BUILDFLAG(IS_CT_SUPPORTED)
+ #if BUILDFLAG(IS_CHROMEOS)
 diff --git a/services/network/public/mojom/network_context.mojom b/services/network/public/mojom/network_context.mojom
-index 6b868b5744f0250d2a566051d26d746a19a26177..3b58a45343e07a013a5d9ae759696502453c68c6 100644
+index d0a041032449fad884d296090aadc16862ef0b2a..b6a2ed2857ee9cb838542d76a5c3031a28483a8b 100644
 --- a/services/network/public/mojom/network_context.mojom
 +++ b/services/network/public/mojom/network_context.mojom
-@@ -1266,6 +1266,9 @@ interface NetworkContext {
+@@ -1099,6 +1099,9 @@ interface NetworkContext {
    SetNetworkConditions(mojo_base.mojom.UnguessableToken throttling_profile_id,
                         NetworkConditions? conditions);
  
@@ -77,14 +77,14 @@ index 6b868b5744f0250d2a566051d26d746a19a26177..3b58a45343e07a013a5d9ae759696502
    SetAcceptLanguage(string new_accept_language);
  
 diff --git a/services/network/test/test_network_context.h b/services/network/test/test_network_context.h
-index db21e3f02b3e0fecf4c2c494afe4d806170be3f1..d0175513938d3307662e95e20bc1f703aeaaa2cb 100644
+index 932610486c245972abee3226cb86cd88316865df..32c3979da750443cb44936b0b2376efa06adb593 100644
 --- a/services/network/test/test_network_context.h
 +++ b/services/network/test/test_network_context.h
-@@ -147,6 +147,7 @@ class TestNetworkContext : public mojom::NetworkContext {
+@@ -136,6 +136,7 @@ class TestNetworkContext : public mojom::NetworkContext {
    void CloseIdleConnections(CloseIdleConnectionsCallback callback) override {}
    void SetNetworkConditions(const base::UnguessableToken& throttling_profile_id,
                              mojom::NetworkConditionsPtr conditions) override {}
 +  void SetUserAgent(const std::string& new_user_agent) override {}
    void SetAcceptLanguage(const std::string& new_accept_language) override {}
    void SetEnableReferrers(bool enable_referrers) override {}
- #if BUILDFLAG(IS_CT_SUPPORTED)
+ #if BUILDFLAG(IS_CHROMEOS)

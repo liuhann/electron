@@ -29,8 +29,14 @@ namespace {
 
 #if BUILDFLAG(IS_MAC)
 bool RegisteringMediaKeyForUntrustedClient(const ui::Accelerator& accelerator) {
-  return Command::IsMediaKey(accelerator) &&
-         !electron::api::SystemPreferences::IsTrustedAccessibilityClient(false);
+  if (base::mac::IsAtLeastOS10_14()) {
+    if (Command::IsMediaKey(accelerator)) {
+      if (!electron::api::SystemPreferences::IsTrustedAccessibilityClient(
+              false))
+        return true;
+    }
+  }
+  return false;
 }
 
 bool MapHasMediaKeys(
@@ -45,7 +51,9 @@ bool MapHasMediaKeys(
 
 }  // namespace
 
-namespace electron::api {
+namespace electron {
+
+namespace api {
 
 gin::WrapperInfo GlobalShortcut::kWrapperInfo = {gin::kEmbedderNativeGin};
 
@@ -56,10 +64,12 @@ GlobalShortcut::~GlobalShortcut() {
 }
 
 void GlobalShortcut::OnKeyPressed(const ui::Accelerator& accelerator) {
-  if (!base::Contains(accelerator_callback_map_, accelerator)) {
+  if (accelerator_callback_map_.find(accelerator) ==
+      accelerator_callback_map_.end()) {
     // This should never occur, because if it does, GlobalShortcutListener
     // notifies us with wrong accelerator.
     NOTREACHED();
+    return;
   }
   accelerator_callback_map_[accelerator].Run();
 }
@@ -172,7 +182,9 @@ const char* GlobalShortcut::GetTypeName() {
   return "GlobalShortcut";
 }
 
-}  // namespace electron::api
+}  // namespace api
+
+}  // namespace electron
 
 namespace {
 
@@ -187,4 +199,4 @@ void Initialize(v8::Local<v8::Object> exports,
 
 }  // namespace
 
-NODE_LINKED_BINDING_CONTEXT_AWARE(electron_browser_global_shortcut, Initialize)
+NODE_LINKED_MODULE_CONTEXT_AWARE(electron_browser_global_shortcut, Initialize)

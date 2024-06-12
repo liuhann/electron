@@ -6,11 +6,9 @@
 #define ELECTRON_SHELL_BROWSER_BLUETOOTH_ELECTRON_BLUETOOTH_DELEGATE_H_
 
 #include <memory>
-#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
 #include "base/scoped_observation.h"
 #include "content/public/browser/bluetooth_delegate.h"
@@ -54,11 +52,12 @@ class ElectronBluetoothDelegate : public content::BluetoothDelegate {
       content::RenderFrameHost* frame,
       const content::BluetoothScanningPrompt::EventHandler& event_handler)
       override;
-  void ShowDevicePairPrompt(content::RenderFrameHost* frame,
-                            const std::u16string& device_identifier,
-                            PairPromptCallback callback,
-                            PairingKind pairing_kind,
-                            const std::optional<std::u16string>& pin) override;
+  void ShowDeviceCredentialsPrompt(content::RenderFrameHost* frame,
+                                   const std::u16string& device_identifier,
+                                   CredentialsCallback callback) override;
+  void ShowDevicePairConfirmPrompt(content::RenderFrameHost* frame,
+                                   const std::u16string& device_identifier,
+                                   PairConfirmCallback callback) override;
   blink::WebBluetoothDeviceId GetWebBluetoothDeviceId(
       content::RenderFrameHost* frame,
       const std::string& device_address) override;
@@ -93,12 +92,6 @@ class ElectronBluetoothDelegate : public content::BluetoothDelegate {
   void AddFramePermissionObserver(FramePermissionObserver* observer) override;
   void RemoveFramePermissionObserver(
       FramePermissionObserver* observer) override;
-
- private:
-  void OnDevicePairPromptResponse(PairPromptCallback callback,
-                                  base::Value::Dict response);
-
-  base::WeakPtrFactory<ElectronBluetoothDelegate> weak_factory_{this};
 };
 
 }  // namespace electron

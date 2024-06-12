@@ -8,7 +8,6 @@
 #include <string>
 
 #include "base/files/file_path.h"
-#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "components/download/public/common/download_item.h"
 #include "gin/handle.h"
@@ -19,12 +18,14 @@
 
 class GURL;
 
-namespace electron::api {
+namespace electron {
+
+namespace api {
 
 class DownloadItem : public gin::Wrappable<DownloadItem>,
                      public gin_helper::Pinnable<DownloadItem>,
                      public gin_helper::EventEmitterMixin<DownloadItem>,
-                     private download::DownloadItem::Observer {
+                     public download::DownloadItem::Observer {
  public:
   static gin::Handle<DownloadItem> FromOrCreate(v8::Isolate* isolate,
                                                 download::DownloadItem* item);
@@ -79,13 +80,15 @@ class DownloadItem : public gin::Wrappable<DownloadItem>,
 
   base::FilePath save_path_;
   file_dialog::DialogSettings dialog_options_;
-  raw_ptr<download::DownloadItem> download_item_;
+  download::DownloadItem* download_item_;
 
-  raw_ptr<v8::Isolate> isolate_;
+  v8::Isolate* isolate_;
 
   base::WeakPtrFactory<DownloadItem> weak_factory_{this};
 };
 
-}  // namespace electron::api
+}  // namespace api
+
+}  // namespace electron
 
 #endif  // ELECTRON_SHELL_BROWSER_API_ELECTRON_API_DOWNLOAD_ITEM_H_

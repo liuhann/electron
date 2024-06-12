@@ -5,10 +5,9 @@
 #ifndef ELECTRON_SHELL_COMMON_ASAR_SCOPED_TEMPORARY_FILE_H_
 #define ELECTRON_SHELL_COMMON_ASAR_SCOPED_TEMPORARY_FILE_H_
 
-#include <optional>
-
 #include "base/files/file_path.h"
 #include "shell/common/asar/archive.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 class File;
@@ -35,7 +34,7 @@ class ScopedTemporaryFile {
                     const base::FilePath::StringType& ext,
                     uint64_t offset,
                     uint64_t size,
-                    const std::optional<IntegrityPayload>& integrity);
+                    const absl::optional<IntegrityPayload>& integrity);
 
   base::FilePath path() const { return path_; }
 

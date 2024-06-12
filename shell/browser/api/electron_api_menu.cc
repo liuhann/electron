@@ -11,7 +11,6 @@
 #include "shell/browser/native_window.h"
 #include "shell/common/gin_converters/accelerator_converter.h"
 #include "shell/common/gin_converters/callback_converter.h"
-#include "shell/common/gin_converters/content_converter.h"
 #include "shell/common/gin_converters/file_path_converter.h"
 #include "shell/common/gin_converters/gurl_converter.h"
 #include "shell/common/gin_converters/image_converter.h"
@@ -45,7 +44,9 @@ struct Converter<SharingItem> {
 
 #endif
 
-namespace electron::api {
+namespace electron {
+
+namespace api {
 
 gin::WrapperInfo Menu::kWrapperInfo = {gin::kEmbedderNativeGin};
 
@@ -211,7 +212,7 @@ void Menu::Clear() {
 }
 
 int Menu::GetIndexOfCommandId(int command_id) const {
-  return model_->GetIndexOfCommandId(command_id).value_or(-1);
+  return model_->GetIndexOfCommandId(command_id);
 }
 
 int Menu::GetItemCount() const {
@@ -267,9 +268,10 @@ void Menu::OnMenuWillShow() {
 }
 
 // static
-void Menu::FillObjectTemplate(v8::Isolate* isolate,
-                              v8::Local<v8::ObjectTemplate> templ) {
-  gin::ObjectTemplateBuilder(isolate, "Menu", templ)
+v8::Local<v8::ObjectTemplate> Menu::FillObjectTemplate(
+    v8::Isolate* isolate,
+    v8::Local<v8::ObjectTemplate> templ) {
+  return gin::ObjectTemplateBuilder(isolate, "Menu", templ)
       .SetMethod("insertItem", &Menu::InsertItemAt)
       .SetMethod("insertCheckItem", &Menu::InsertCheckItemAt)
       .SetMethod("insertRadioItem", &Menu::InsertRadioItemAt)
@@ -299,11 +301,9 @@ void Menu::FillObjectTemplate(v8::Isolate* isolate,
       .Build();
 }
 
-const char* Menu::GetTypeName() {
-  return GetClassName();
-}
+}  // namespace api
 
-}  // namespace electron::api
+}  // namespace electron
 
 namespace {
 
@@ -326,4 +326,4 @@ void Initialize(v8::Local<v8::Object> exports,
 
 }  // namespace
 
-NODE_LINKED_BINDING_CONTEXT_AWARE(electron_browser_menu, Initialize)
+NODE_LINKED_MODULE_CONTEXT_AWARE(electron_browser_menu, Initialize)

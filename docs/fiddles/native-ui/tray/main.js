@@ -1,4 +1,4 @@
-const { app, Tray, Menu, nativeImage } = require('electron/main')
+const { app, Tray, Menu, nativeImage } = require('electron')
 
 let tray
 

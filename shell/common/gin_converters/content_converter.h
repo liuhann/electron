@@ -13,17 +13,13 @@
 #include "third_party/blink/public/common/permissions/permission_utils.h"
 #include "third_party/blink/public/mojom/choosers/popup_menu.mojom.h"
 #include "third_party/blink/public/mojom/permissions/permission_status.mojom.h"
-#include "ui/base/ui_base_types.h"
 
 namespace content {
 struct ContextMenuParams;
+struct NativeWebKeyboardEvent;
 class RenderFrameHost;
 class WebContents;
 }  // namespace content
-
-namespace input {
-struct NativeWebKeyboardEvent;
-}
 
 using ContextMenuParamsWithRenderFrameHost =
     std::pair<content::ContextMenuParams, content::RenderFrameHost*>;
@@ -41,15 +37,6 @@ struct Converter<ContextMenuParamsWithRenderFrameHost> {
   static v8::Local<v8::Value> ToV8(
       v8::Isolate* isolate,
       const ContextMenuParamsWithRenderFrameHost& val);
-};
-
-template <>
-struct Converter<ui::MenuSourceType> {
-  static v8::Local<v8::Value> ToV8(v8::Isolate* isolate,
-                                   const ui::MenuSourceType& val);
-  static bool FromV8(v8::Isolate* isolate,
-                     v8::Local<v8::Value> val,
-                     ui::MenuSourceType* out);
 };
 
 template <>
@@ -91,12 +78,12 @@ struct Converter<content::Referrer> {
 };
 
 template <>
-struct Converter<input::NativeWebKeyboardEvent> {
+struct Converter<content::NativeWebKeyboardEvent> {
   static bool FromV8(v8::Isolate* isolate,
                      v8::Local<v8::Value> val,
-                     input::NativeWebKeyboardEvent* out);
+                     content::NativeWebKeyboardEvent* out);
   static v8::Local<v8::Value> ToV8(v8::Isolate* isolate,
-                                   const input::NativeWebKeyboardEvent& in);
+                                   const content::NativeWebKeyboardEvent& in);
 };
 
 }  // namespace gin

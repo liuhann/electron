@@ -1,11 +1,10 @@
 import sys
 import os
-import subprocess
 
 def main(argv):
-  os.chdir(argv[1])
-  p = subprocess.Popen(argv[2:])
-  return p.wait()
+  cwd = argv[1]
+  os.chdir(cwd)
+  os.execv(sys.executable, [sys.executable] + argv[2:])
 
 if __name__ == '__main__':
-  sys.exit(main(sys.argv))
+  main(sys.argv)

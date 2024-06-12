@@ -1,5 +1,5 @@
-const { app, BrowserWindow } = require('electron/main')
-const os = require('node:os')
+const { app, BrowserWindow } = require('electron')
+const os = require('os');
 
 function createWindow () {
   const win = new BrowserWindow({
@@ -7,24 +7,24 @@ function createWindow () {
     height: 600
   })
 
-  win.setRepresentedFilename(os.homedir())
-  win.setDocumentEdited(true)
-
   win.loadFile('index.html')
 }
 
 app.whenReady().then(() => {
-  createWindow()
+  const win = new BrowserWindow()
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow()
-    }
-  })
+  win.setRepresentedFilename(os.homedir())
+  win.setDocumentEdited(true)
 })
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
+  }
+})
+
+app.on('activate', () => {
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createWindow()
   }
 })

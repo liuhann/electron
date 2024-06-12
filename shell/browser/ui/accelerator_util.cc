@@ -11,6 +11,7 @@
 
 #include "base/logging.h"
 #include "base/stl_util.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "shell/common/keyboard_util.h"
@@ -20,10 +21,7 @@ namespace accelerator_util {
 bool StringToAccelerator(const std::string& shortcut,
                          ui::Accelerator* accelerator) {
   if (!base::IsStringASCII(shortcut)) {
-    LOG(ERROR) << "The accelerator string can only contain ASCII characters, "
-                  "invalid string: "
-               << "\"" << shortcut << "\"";
-
+    LOG(ERROR) << "The accelerator string can only contain ASCII characters";
     return false;
   }
 
@@ -33,7 +31,7 @@ bool StringToAccelerator(const std::string& shortcut,
   // Now, parse it into an accelerator.
   int modifiers = ui::EF_NONE;
   ui::KeyboardCode key = ui::VKEY_UNKNOWN;
-  std::optional<char16_t> shifted_char;
+  absl::optional<char16_t> shifted_char;
   for (const auto& token : tokens) {
     ui::KeyboardCode code = electron::KeyboardCodeFromStr(token, &shifted_char);
     if (shifted_char)
@@ -73,8 +71,8 @@ bool StringToAccelerator(const std::string& shortcut,
 
 void GenerateAcceleratorTable(AcceleratorTable* table,
                               electron::ElectronMenuModel* model) {
-  size_t count = model->GetItemCount();
-  for (size_t i = 0; i < count; ++i) {
+  int count = model->GetItemCount();
+  for (int i = 0; i < count; ++i) {
     electron::ElectronMenuModel::ItemType type = model->GetTypeAt(i);
     if (type == electron::ElectronMenuModel::TYPE_SUBMENU) {
       auto* submodel = model->GetSubmenuModelAt(i);

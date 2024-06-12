@@ -8,10 +8,8 @@
 #ifndef ELECTRON_SHELL_BROWSER_UI_VIEWS_WIN_CAPTION_BUTTON_CONTAINER_H_
 #define ELECTRON_SHELL_BROWSER_UI_VIEWS_WIN_CAPTION_BUTTON_CONTAINER_H_
 
-#include "base/memory/raw_ptr.h"
 #include "base/scoped_observation.h"
 #include "ui/base/metadata/metadata_header_macros.h"
-#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/pointer/touch_ui_controller.h"
 #include "ui/views/controls/button/button.h"
 #include "ui/views/view.h"
@@ -27,9 +25,7 @@ class WinCaptionButton;
 // frame and browser window as needed. When extended horizontally, becomes a
 // grab bar for moving the window.
 class WinCaptionButtonContainer : public views::View,
-                                  private views::WidgetObserver {
-  METADATA_HEADER(WinCaptionButtonContainer, views::View)
-
+                                  public views::WidgetObserver {
  public:
   explicit WinCaptionButtonContainer(WinFrameView* frame_view);
   ~WinCaptionButtonContainer() override;
@@ -44,9 +40,6 @@ class WinCaptionButtonContainer : public views::View,
 
   gfx::Size GetButtonSize() const;
   void SetButtonSize(gfx::Size size);
-
-  // Sets caption button container background color.
-  void UpdateBackground();
 
   // Sets caption button visibility and enabled state based on window state.
   // Only one of maximize or restore button should ever be visible at the same
@@ -65,11 +58,11 @@ class WinCaptionButtonContainer : public views::View,
   void OnWidgetBoundsChanged(views::Widget* widget,
                              const gfx::Rect& new_bounds) override;
 
-  raw_ptr<WinFrameView> const frame_view_;
-  raw_ptr<WinCaptionButton> const minimize_button_;
-  raw_ptr<WinCaptionButton> const maximize_button_;
-  raw_ptr<WinCaptionButton> const restore_button_;
-  raw_ptr<WinCaptionButton> const close_button_;
+  WinFrameView* const frame_view_;
+  WinCaptionButton* const minimize_button_;
+  WinCaptionButton* const maximize_button_;
+  WinCaptionButton* const restore_button_;
+  WinCaptionButton* const close_button_;
 
   base::ScopedObservation<views::Widget, views::WidgetObserver>
       widget_observation_{this};

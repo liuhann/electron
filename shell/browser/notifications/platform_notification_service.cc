@@ -35,9 +35,6 @@ void OnWebNotificationAllowed(base::WeakPtr<Notification> notification,
     options.icon = icon;
     options.silent = audio_muted ? true : data.silent;
     options.has_reply = false;
-    if (data.require_interaction)
-      options.timeout_type = u"never";
-
     notification->Show(options);
   } else {
     notification->Destroy();
@@ -133,10 +130,6 @@ void PlatformNotificationService::CloseNotification(
 }
 
 void PlatformNotificationService::GetDisplayedNotifications(
-    DisplayedNotificationsCallback callback) {}
-
-void PlatformNotificationService::GetDisplayedNotificationsForOrigin(
-    const GURL& origin,
     DisplayedNotificationsCallback callback) {}
 
 int64_t PlatformNotificationService::ReadNextPersistentNotificationId() {

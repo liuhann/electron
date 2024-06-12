@@ -5,7 +5,6 @@
 #include <limits>
 #include <memory>
 #include <string>
-#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -16,6 +15,7 @@
 #include "content/public/renderer/render_frame.h"
 #include "content/public/renderer/render_frame_observer.h"
 #include "content/public/renderer/render_frame_visitor.h"
+#include "content/public/renderer/render_view.h"
 #include "gin/handle.h"
 #include "gin/object_template_builder.h"
 #include "gin/wrappable.h"
@@ -24,7 +24,6 @@
 #include "shell/common/gin_converters/blink_converter.h"
 #include "shell/common/gin_converters/callback_converter.h"
 #include "shell/common/gin_converters/file_path_converter.h"
-#include "shell/common/gin_converters/value_converter.h"
 #include "shell/common/gin_helper/dictionary.h"
 #include "shell/common/gin_helper/error_thrower.h"
 #include "shell/common/gin_helper/function_template_extensions.h"
@@ -56,12 +55,28 @@
 #include "ui/base/ime/ime_text_span.h"
 #include "url/url_util.h"
 
-#if BUILDFLAG(ENABLE_BUILTIN_SPELLCHECKER)
-#include "components/spellcheck/renderer/spellcheck.h"
-#include "components/spellcheck/renderer/spellcheck_provider.h"
-#endif
-
 namespace gin {
+
+template <>
+struct Converter<blink::WebLocalFrame::ScriptExecutionType> {
+  static bool FromV8(v8::Isolate* isolate,
+                     v8::Local<v8::Value> val,
+                     blink::WebLocalFrame::ScriptExecutionType* out) {
+    std::string execution_type;
+    if (!ConvertFromV8(isolate, val, &execution_type))
+      return false;
+    if (execution_type == "asynchronous") {
+      *out = blink::WebLocalFrame::kAsynchronous;
+    } else if (execution_type == "asynchronousBlockingOnload") {
+      *out = blink::WebLocalFrame::kAsynchronousBlockingOnload;
+    } else if (execution_type == "synchronous") {
+      *out = blink::WebLocalFrame::kSynchronous;
+    } else {
+      return false;
+    }
+    return true;
+  }
+};
 
 template <>
 struct Converter<blink::WebCssOrigin> {
@@ -110,20 +125,15 @@ bool SpellCheckWord(content::RenderFrame* render_frame,
 
   RendererClientBase* client = RendererClientBase::Get();
 
-  mojo::Remote<spellcheck::mojom::SpellCheckHost> spellcheck_host;
-  render_frame->GetBrowserInterfaceBroker()->GetInterface(
-      spellcheck_host.BindNewPipeAndPassReceiver());
-  if (!spellcheck_host.is_bound())
-    return false;
-
   std::u16string w = base::UTF8ToUTF16(word);
+  int id = render_frame->GetRoutingID();
   return client->GetSpellCheck()->SpellCheckWord(
-      w, *spellcheck_host.get(), &start, &length, optional_suggestions);
+      w.c_str(), 0, word.size(), id, &start, &length, optional_suggestions);
 }
 
 #endif
 
-class ScriptExecutionCallback {
+class ScriptExecutionCallback : public blink::WebScriptExecutionCallback {
  public:
   // for compatibility with the older version of this, error is after result
   using CompletionCallback =
@@ -135,7 +145,7 @@ class ScriptExecutionCallback {
       CompletionCallback callback)
       : promise_(std::move(promise)), callback_(std::move(callback)) {}
 
-  ~ScriptExecutionCallback() = default;
+  ~ScriptExecutionCallback() override = default;
 
   // disable copy
   ScriptExecutionCallback(const ScriptExecutionCallback&) = delete;
@@ -151,12 +161,9 @@ class ScriptExecutionCallback {
     {
       v8::TryCatch try_catch(isolate);
       context_bridge::ObjectCache object_cache;
-      v8::Local<v8::Context> source_context =
-          result->GetCreationContextChecked();
-      maybe_result =
-          PassValueToOtherContext(source_context, promise_.GetContext(), result,
-                                  source_context->Global(), &object_cache,
-                                  false, 0, BridgeErrorTarget::kSource);
+      maybe_result = PassValueToOtherContext(
+          result->GetCreationContextChecked(), promise_.GetContext(), result,
+          &object_cache, false, 0);
       if (maybe_result.IsEmpty() || try_catch.HasCaught()) {
         success = false;
       }
@@ -187,7 +194,8 @@ class ScriptExecutionCallback {
     }
   }
 
-  void Completed(const blink::WebVector<v8::Local<v8::Value>>& result) {
+  void Completed(
+      const blink::WebVector<v8::Local<v8::Value>>& result) override {
     v8::Isolate* isolate = promise_.isolate();
     if (!result.empty()) {
       if (!result[0].IsEmpty()) {
@@ -272,7 +280,7 @@ class FrameSetSpellChecker : public content::RenderFrameVisitor {
   content::RenderFrame* main_frame_;
 };
 
-class SpellCheckerHolder final : private content::RenderFrameObserver {
+class SpellCheckerHolder final : public content::RenderFrameObserver {
  public:
   // Find existing holder for the |render_frame|.
   static SpellCheckerHolder* FromRenderFrame(
@@ -327,8 +335,10 @@ class SpellCheckerHolder final : private content::RenderFrameObserver {
   std::unique_ptr<SpellCheckClient> spell_check_client_;
 };
 
+}  // namespace
+
 class WebFrameRenderer : public gin::Wrappable<WebFrameRenderer>,
-                         private content::RenderFrameObserver {
+                         public content::RenderFrameObserver {
  public:
   static gin::WrapperInfo kWrapperInfo;
 
@@ -395,7 +405,7 @@ class WebFrameRenderer : public gin::Wrappable<WebFrameRenderer>,
 
  private:
   bool MaybeGetRenderFrame(v8::Isolate* isolate,
-                           const std::string_view method_name,
+                           const std::string& method_name,
                            content::RenderFrame** render_frame_ptr) {
     std::string error_msg;
     if (!MaybeGetRenderFrame(&error_msg, method_name, render_frame_ptr)) {
@@ -406,12 +416,13 @@ class WebFrameRenderer : public gin::Wrappable<WebFrameRenderer>,
   }
 
   bool MaybeGetRenderFrame(std::string* error_msg,
-                           const std::string_view method_name,
+                           const std::string& method_name,
                            content::RenderFrame** render_frame_ptr) {
     auto* frame = render_frame();
     if (!frame) {
-      *error_msg = base::ToString("Render frame was torn down before webFrame.",
-                                  method_name, " could be executed");
+      *error_msg = "Render frame was torn down before webFrame." + method_name +
+                   " could be "
+                   "executed";
       return false;
     }
     *render_frame_ptr = frame;
@@ -498,8 +509,22 @@ class WebFrameRenderer : public gin::Wrappable<WebFrameRenderer>,
     } else if (pref_name == options::kHiddenPage) {
       // NOTE: hiddenPage is internal-only.
       return gin::ConvertToV8(isolate, prefs.hidden_page);
+    } else if (pref_name == options::kOffscreen) {
+      return gin::ConvertToV8(isolate, prefs.offscreen);
     } else if (pref_name == options::kNodeIntegration) {
       return gin::ConvertToV8(isolate, prefs.node_integration);
+    } else if (pref_name == options::kNodeIntegrationInWorker) {
+      return gin::ConvertToV8(isolate, prefs.node_integration_in_worker);
+    } else if (pref_name == options::kNodeIntegrationInSubFrames) {
+      return gin::ConvertToV8(isolate, true);
+#if BUILDFLAG(ENABLE_BUILTIN_SPELLCHECKER)
+    } else if (pref_name == options::kSpellcheck) {
+      return gin::ConvertToV8(isolate, prefs.enable_spellcheck);
+#endif
+    } else if (pref_name == options::kPlugins) {
+      return gin::ConvertToV8(isolate, prefs.enable_plugins);
+    } else if (pref_name == options::kEnableWebSQL) {
+      return gin::ConvertToV8(isolate, prefs.enable_websql);
     } else if (pref_name == options::kWebviewTag) {
       return gin::ConvertToV8(isolate, prefs.webview_tag);
     }
@@ -650,21 +675,13 @@ class WebFrameRenderer : public gin::Wrappable<WebFrameRenderer>,
     ScriptExecutionCallback::CompletionCallback completion_callback;
     args->GetNext(&completion_callback);
 
-    auto* self = new ScriptExecutionCallback(std::move(promise),
-                                             std::move(completion_callback));
-
     render_frame->GetWebFrame()->RequestExecuteScript(
-        blink::DOMWrapperWorld::kMainWorldId, base::make_span(&source, 1u),
-        has_user_gesture ? blink::mojom::UserActivationOption::kActivate
-                         : blink::mojom::UserActivationOption::kDoNotActivate,
-        blink::mojom::EvaluationTiming::kSynchronous,
-        blink::mojom::LoadEventBlockingOption::kDoNotBlock,
-        base::NullCallback(),
-        base::BindOnce(&ScriptExecutionCallback::Completed,
-                       base::Unretained(self)),
+        blink::DOMWrapperWorld::kMainWorldId, base::make_span(&source, 1),
+        has_user_gesture, blink::WebLocalFrame::kSynchronous,
+        new ScriptExecutionCallback(std::move(promise),
+                                    std::move(completion_callback)),
         blink::BackForwardCacheAware::kAllow,
-        blink::mojom::WantResultOption::kWantResult,
-        blink::mojom::PromiseResultOption::kDoNotWait);
+        blink::WebLocalFrame::PromiseBehavior::kDontWait);
 
     return handle;
   }
@@ -690,19 +707,9 @@ class WebFrameRenderer : public gin::Wrappable<WebFrameRenderer>,
     bool has_user_gesture = false;
     args->GetNext(&has_user_gesture);
 
-    blink::mojom::EvaluationTiming script_execution_type =
-        blink::mojom::EvaluationTiming::kSynchronous;
-    blink::mojom::LoadEventBlockingOption load_blocking_option =
-        blink::mojom::LoadEventBlockingOption::kDoNotBlock;
-    std::string execution_type;
-    args->GetNext(&execution_type);
-
-    if (execution_type == "asynchronous") {
-      script_execution_type = blink::mojom::EvaluationTiming::kAsynchronous;
-    } else if (execution_type == "asynchronousBlockingOnload") {
-      script_execution_type = blink::mojom::EvaluationTiming::kAsynchronous;
-      load_blocking_option = blink::mojom::LoadEventBlockingOption::kBlock;
-    }
+    blink::WebLocalFrame::ScriptExecutionType scriptExecutionType =
+        blink::WebLocalFrame::kSynchronous;
+    args->GetNext(&scriptExecutionType);
 
     ScriptExecutionCallback::CompletionCallback completion_callback;
     args->GetNext(&completion_callback);
@@ -732,20 +739,13 @@ class WebFrameRenderer : public gin::Wrappable<WebFrameRenderer>,
                            blink::WebURL(GURL(url)));
     }
 
-    // Deletes itself.
-    auto* self = new ScriptExecutionCallback(std::move(promise),
-                                             std::move(completion_callback));
-
     render_frame->GetWebFrame()->RequestExecuteScript(
-        world_id, base::make_span(sources),
-        has_user_gesture ? blink::mojom::UserActivationOption::kActivate
-                         : blink::mojom::UserActivationOption::kDoNotActivate,
-        script_execution_type, load_blocking_option, base::NullCallback(),
-        base::BindOnce(&ScriptExecutionCallback::Completed,
-                       base::Unretained(self)),
+        world_id, base::make_span(sources), has_user_gesture,
+        scriptExecutionType,
+        new ScriptExecutionCallback(std::move(promise),
+                                    std::move(completion_callback)),
         blink::BackForwardCacheAware::kPossiblyDisallow,
-        blink::mojom::WantResultOption::kWantResult,
-        blink::mojom::PromiseResultOption::kDoNotWait);
+        blink::WebLocalFrame::PromiseBehavior::kDontWait);
 
     return handle;
   }
@@ -804,6 +804,7 @@ class WebFrameRenderer : public gin::Wrappable<WebFrameRenderer>,
 #endif
 
   void ClearCache(v8::Isolate* isolate) {
+    isolate->IdleNotificationDeadline(0.5);
     blink::WebCache::Clear();
     base::MemoryPressureListener::NotifyMemoryPressure(
         base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_CRITICAL);
@@ -900,7 +901,6 @@ class WebFrameRenderer : public gin::Wrappable<WebFrameRenderer>,
     return render_frame->GetRoutingID();
   }
 };
-}  // namespace
 
 gin::WrapperInfo WebFrameRenderer::kWrapperInfo = {gin::kEmbedderNativeGin};
 
@@ -927,4 +927,4 @@ void Initialize(v8::Local<v8::Object> exports,
 
 }  // namespace
 
-NODE_LINKED_BINDING_CONTEXT_AWARE(electron_renderer_web_frame, Initialize)
+NODE_LINKED_MODULE_CONTEXT_AWARE(electron_renderer_web_frame, Initialize)

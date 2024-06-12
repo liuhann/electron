@@ -1,8 +1,8 @@
 const asar = require('@electron/asar');
-const assert = require('node:assert');
+const assert = require('assert');
 const fs = require('fs-extra');
-const os = require('node:os');
-const path = require('node:path');
+const os = require('os');
+const path = require('path');
 
 const getArgGroup = (name) => {
   const group = [];

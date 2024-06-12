@@ -7,7 +7,6 @@
 
 #include <string>
 
-#include "base/memory/raw_ptr.h"
 #include "ui/views/widget/native_widget_mac.h"
 
 namespace electron {
@@ -32,7 +31,7 @@ class ElectronNativeWidgetMac : public views::NativeWidgetMac {
       const remote_cocoa::mojom::CreateWindowParams* params) override;
 
  private:
-  raw_ptr<NativeWindowMac> shell_;
+  NativeWindowMac* shell_;
   std::string window_type_;
   NSUInteger style_mask_;
 };

@@ -42,9 +42,12 @@
 @implementation TrustDelegate
 
 - (void)dealloc {
+  [panel_ release];
   CFRelease(trust_);
   CFRelease(cert_chain_);
   CFRelease(sec_policy_);
+
+  [super dealloc];
 }
 
 - (id)initWithPromise:(gin_helper::Promise<void>)promise
@@ -71,9 +74,10 @@
   auto* cert_db = net::CertDatabase::GetInstance();
   // This forces Chromium to reload the certificate since it might be trusted
   // now.
-  cert_db->NotifyObserversTrustStoreChanged();
+  cert_db->NotifyObserversCertDBChanged();
 
   promise_->Resolve();
+  [self autorelease];
 }
 
 @end
@@ -92,7 +96,7 @@ v8::Local<v8::Promise> ShowCertificateTrust(
   auto cert_chain =
       net::x509_util::CreateSecCertificateArrayForX509Certificate(cert.get());
   SecTrustRef trust = nullptr;
-  SecTrustCreateWithCertificates(cert_chain.get(), sec_policy, &trust);
+  SecTrustCreateWithCertificates(cert_chain, sec_policy, &trust);
 
   NSWindow* window = parent_window
                          ? parent_window->GetNativeWindow().GetNativeNSWindow()
@@ -104,7 +108,7 @@ v8::Local<v8::Promise> ShowCertificateTrust(
                                                    panel:panel
                                                     cert:cert
                                                    trust:trust
-                                               certChain:cert_chain.release()
+                                               certChain:cert_chain
                                                secPolicy:sec_policy];
   [panel beginSheetForWindow:window
                modalDelegate:delegate
